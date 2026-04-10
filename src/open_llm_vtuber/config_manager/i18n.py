@@ -9,7 +9,7 @@ class MultiLingualString(BaseModel):
     """
 
     en: str = Field(..., description="English translation")
-    zh: str = Field(..., description="Chinese translation")
+    zh: str = Field(default="", description="Chinese translation")
 
     def get(self, lang_code: str) -> str:
         """
