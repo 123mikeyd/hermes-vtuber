@@ -1,0 +1,12 @@
+# Add to your conf.yaml under agent_config:
+
+agent_config:
+  conversation_agent_choice: 'hermes_agent'
+
+  agent_settings:
+    hermes_agent:
+      hermes_path: '/home/mikeyd/.local/bin/hermes'
+      faster_first_response: True
+      segment_method: 'pysbd'
+      model: ''
+      timeout: 120
