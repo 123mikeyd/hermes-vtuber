@@ -6,6 +6,7 @@ from .agents.basic_memory_agent import BasicMemoryAgent
 from .stateless_llm_factory import LLMFactory as StatelessLLMFactory
 from .agents.hume_ai import HumeAIAgent
 from .agents.letta_agent import LettaAgent
+from .agents.hermes_agent import HermesAgent
 
 from ..mcpp.tool_manager import ToolManager
 from ..mcpp.tool_executor import ToolExecutor
@@ -126,6 +127,19 @@ class AgentFactory:
                 segment_method=settings.get("segment_method"),
                 host=settings.get("host"),
                 port=settings.get("port"),
+            )
+
+        elif conversation_agent_choice == "hermes_agent":
+            settings = agent_settings.get("hermes_agent", {})
+            return HermesAgent(
+                hermes_path=settings.get("hermes_path", "hermes"),
+                system=system_prompt,
+                live2d_model=live2d_model,
+                tts_preprocessor_config=tts_preprocessor_config,
+                faster_first_response=settings.get("faster_first_response", True),
+                segment_method=settings.get("segment_method", "pysbd"),
+                model=settings.get("model", ""),
+                timeout=settings.get("timeout", 120),
             )
 
         else:
