@@ -113,9 +113,70 @@ class HermesAgent(AgentInterface):
         parts.append("Assistant:")
         return "\n".join(parts)
 
+    @staticmethod
+    def _clean_response(text: str) -> str:
+        """
+        Strip CLI metadata artifacts from hermes output.
+
+        Removes:
+        - ASCII art banner (╭─╮ box drawing)
+        - Tool/skill listings
+        - Session info, duration, "Resume with:" lines
+        - Separator lines (───, ===)
+        - "Initializing agent..." and status lines
+        - "Query:" prompt echo
+        """
+        lines = text.split("\n")
+        cleaned = []
+        in_banner = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            # Box drawing banner boundaries
+            if stripped.startswith("╭") or stripped.startswith("╰"):
+                in_banner = not stripped.startswith("╰")
+                continue
+            if stripped.startswith("│"):
+                continue
+
+            # Separator lines
+            if re.match(r"^[─═\-]{10,}$", stripped):
+                continue
+
+            # Status/metadata lines
+            if any(stripped.startswith(p) for p in [
+                "Initializing agent",
+                "Query:",
+                "Resume this session",
+                "Session:",
+                "Duration:",
+                "Messages:",
+                "Hermes Agent v",
+                "Available Tools",
+                "Available Skills",
+            ]):
+                continue
+
+            # Hermes separator with label
+            if "Hermes" in stripped and "─" in stripped:
+                continue
+
+            # Empty lines at boundaries
+            if not stripped and not cleaned:
+                continue
+
+            cleaned.append(line)
+
+        # Strip trailing empty lines
+        while cleaned and not cleaned[-1].strip():
+            cleaned.pop()
+
+        return "\n".join(cleaned)
+
     async def _call_hermes(self, prompt: str) -> str:
         """Call hermes CLI and return response."""
-        cmd = [self._hermes_path, "chat", "-q", prompt]
+        cmd = [self._hermes_path, "chat", "-q", prompt, "-Q"]
         if self._model:
             cmd.extend(["--model", self._model])
 
@@ -138,8 +199,11 @@ class HermesAgent(AgentInterface):
 
             response = stdout.decode("utf-8", errors="replace").strip()
 
-            # Strip thinking/reasoning content before returning
+            # Strip thinking/reasoning content
             response = self._strip_thinking(response)
+
+            # Strip CLI banner, metadata, session info
+            response = self._clean_response(response)
 
             if not response:
                 logger.warning("Hermes returned empty response after stripping thinking")
