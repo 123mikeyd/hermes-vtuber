@@ -128,41 +128,47 @@ class HermesAgent(AgentInterface):
         """
         lines = text.split("\n")
         cleaned = []
-        in_banner = False
 
         for line in lines:
             stripped = line.strip()
 
             # Box drawing banner boundaries
             if stripped.startswith("╭") or stripped.startswith("╰"):
-                in_banner = not stripped.startswith("╰")
                 continue
             if stripped.startswith("│"):
                 continue
 
-            # Separator lines
+            # Separator lines (standalone)
             if re.match(r"^[─═\-]{10,}$", stripped):
                 continue
 
-            # Status/metadata lines
-            if any(stripped.startswith(p) for p in [
-                "Initializing agent",
-                "Query:",
+            # Kill anything containing these keywords — catch mixed separator+text lines
+            kill_patterns = [
                 "Resume this session",
                 "Session:",
                 "Duration:",
                 "Messages:",
+                "hermes --resume",
+                "Initializing agent",
+                "Query:",
                 "Hermes Agent v",
                 "Available Tools",
                 "Available Skills",
-            ]):
+            ]
+            if any(p in stripped for p in kill_patterns):
                 continue
 
             # Hermes separator with label
             if "Hermes" in stripped and "─" in stripped:
                 continue
 
-            # Empty lines at boundaries
+            # Lines that are mostly separators with a little text mixed in
+            # e.g. "────────── Resume this session with: ..."
+            sep_ratio = sum(1 for c in stripped if c in "─═") / max(len(stripped), 1)
+            if sep_ratio > 0.3:
+                continue
+
+            # Skip leading empty lines
             if not stripped and not cleaned:
                 continue
 
