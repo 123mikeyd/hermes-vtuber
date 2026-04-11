@@ -128,47 +128,41 @@ class HermesAgent(AgentInterface):
         """
         lines = text.split("\n")
         cleaned = []
+        in_banner = False
 
         for line in lines:
             stripped = line.strip()
 
             # Box drawing banner boundaries
             if stripped.startswith("╭") or stripped.startswith("╰"):
+                in_banner = not stripped.startswith("╰")
                 continue
             if stripped.startswith("│"):
                 continue
 
-            # Separator lines (standalone)
+            # Separator lines
             if re.match(r"^[─═\-]{10,}$", stripped):
                 continue
 
-            # Kill anything containing these keywords — catch mixed separator+text lines
-            kill_patterns = [
+            # Status/metadata lines
+            if any(stripped.startswith(p) for p in [
+                "Initializing agent",
+                "Query:",
                 "Resume this session",
                 "Session:",
                 "Duration:",
                 "Messages:",
-                "hermes --resume",
-                "Initializing agent",
-                "Query:",
                 "Hermes Agent v",
                 "Available Tools",
                 "Available Skills",
-            ]
-            if any(p in stripped for p in kill_patterns):
+            ]):
                 continue
 
             # Hermes separator with label
             if "Hermes" in stripped and "─" in stripped:
                 continue
 
-            # Lines that are mostly separators with a little text mixed in
-            # e.g. "────────── Resume this session with: ..."
-            sep_ratio = sum(1 for c in stripped if c in "─═") / max(len(stripped), 1)
-            if sep_ratio > 0.3:
-                continue
-
-            # Skip leading empty lines
+            # Empty lines at boundaries
             if not stripped and not cleaned:
                 continue
 
@@ -182,7 +176,10 @@ class HermesAgent(AgentInterface):
 
     async def _call_hermes(self, prompt: str) -> str:
         """Call hermes CLI and return response."""
-        cmd = [self._hermes_path, "chat", "-q", prompt, "-Q"]
+        # Build the hermes command: hermes chat -Q -q "message"
+        # -Q = quiet mode (suppress banner, spinner, tool previews)
+        # -q = single query mode
+        cmd = [self._hermes_path, "chat", "-Q", "-q", prompt]
         if self._model:
             cmd.extend(["--model", self._model])
 
@@ -211,8 +208,13 @@ class HermesAgent(AgentInterface):
             # Strip CLI banner, metadata, session info
             response = self._clean_response(response)
 
+            # Strip session_id line (quiet mode appends it)
+            lines = response.split('\n')
+            clean_lines = [l for l in lines if not l.strip().startswith('session_id:')]
+            response = '\n'.join(clean_lines).strip()
+
             if not response:
-                logger.warning("Hermes returned empty response after stripping thinking")
+                logger.warning("Hermes returned empty response after stripping")
                 return "[No response]"
 
             logger.info(f"Hermes response: {len(response)} chars")

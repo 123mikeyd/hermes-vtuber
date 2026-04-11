@@ -1,51 +1,121 @@
 [
-    {
-        "name": "mao_pro",
-        "description": "",
-        "url": "/live2d-models/mao_pro/runtime/mao_pro.model3.json",
-        "kScale": 0.5,
-        "initialXshift": 0,
-        "initialYshift": 0,
-        "kXOffset": 1150,
-        "idleMotionGroupName": "Idle",
-        "emotionMap": {
-            "neutral": 0,
-            "anger": 2,
-            "disgust": 2,
-            "fear": 1,
-            "joy": 3,
-            "smirk": 3,
-            "sadness": 1,
-            "surprise": 3
-        },
-        "tapMotions": {
-            "HitAreaHead": {
-                "": 1
-            },
-            "HitAreaBody": {
-                "": 1
-            }
-        }
+  {
+    "name": "mao_pro",
+    "description": "",
+    "url": "/live2d-models/mao_pro/runtime/mao_pro.model3.json",
+    "kScale": 0.5,
+    "initialXshift": 0,
+    "initialYshift": 0,
+    "kXOffset": 1150,
+    "idleMotionGroupName": "Idle",
+    "emotionMap": {
+      "neutral": 0,
+      "anger": 2,
+      "disgust": 2,
+      "fear": 1,
+      "joy": 3,
+      "smirk": 3,
+      "sadness": 1,
+      "surprise": 3
     },
-    {
-        "name": "shizuku",
-        "description": "",
-        "url": "/live2d-models/shizuku/runtime/shizuku.model3.json",
-        "kScale": 0.5,
-        "initialXshift": 0,
-        "initialYshift": 0,
-        "kXOffset": 1150,
-        "idleMotionGroupName": "Idle",
-        "emotionMap": {
-            "neutral": 0,
-            "anger": 2,
-            "disgust": 2,
-            "fear": 1,
-            "joy": 3,
-            "smirk": 3,
-            "sadness": 1,
-            "surprise": 3
-        },
-        "tapMotions": {}
+    "tapMotions": {
+      "HitAreaHead": {
+        "": 1
+      },
+      "HitAreaBody": {
+        "": 1
+      }
     }
+  },
+  {
+    "name": "shizuku",
+    "description": "",
+    "url": "/live2d-models/shizuku/runtime/shizuku.model3.json",
+    "kScale": 0.5,
+    "initialXshift": 0,
+    "initialYshift": 0,
+    "kXOffset": 1150,
+    "idleMotionGroupName": "Idle",
+    "emotionMap": {
+      "neutral": 0,
+      "anger": 2,
+      "disgust": 2,
+      "fear": 1,
+      "joy": 3,
+      "smirk": 3,
+      "sadness": 1,
+      "surprise": 3
+    },
+    "tapMotions": {}
+  },
+  {
+    "name": "lingbo",
+    "description": "Ayanami - short blue hair, demon girl aesthetic",
+    "url": "https://raw.githubusercontent.com/zenghongtu/live2d-model-assets/master/assets/moc3/lingbo/lingbo.model3.json",
+    "kScale": 0.5,
+    "initialXshift": 0,
+    "initialYshift": 0,
+    "kXOffset": 1150,
+    "idleMotionGroupName": "Idle",
+    "emotionMap": {
+      "neutral": 0,
+      "anger": 1,
+      "disgust": 1,
+      "fear": 0,
+      "joy": 2,
+      "smirk": 2,
+      "sadness": 0,
+      "surprise": 3
+    },
+    "tapMotions": {}
+  },
+  {
+    "name": "lafei",
+    "description": "Laffey - sleepy bunny, short white-pink hair, headphones-like ears",
+    "url": "https://raw.githubusercontent.com/zenghongtu/live2d-model-assets/master/assets/moc3/lafei/lafei.model3.json",
+    "kScale": 0.5,
+    "initialXshift": 0,
+    "initialYshift": 0,
+    "kXOffset": 1150,
+    "idleMotionGroupName": "Idle",
+    "emotionMap": {
+      "neutral": 0,
+      "anger": 1,
+      "disgust": 1,
+      "fear": 0,
+      "joy": 2,
+      "smirk": 1,
+      "sadness": 0,
+      "surprise": 2
+    },
+    "tapMotions": {}
+  },
+  {
+    "name": "hermes_dark",
+    "description": "Dark-haired variant with headphones",
+    "url": "/live2d-models/hermes_dark/runtime/hermes_dark.model3.json",
+    "kScale": 0.5,
+    "initialXshift": 0,
+    "initialYshift": 0,
+    "kXOffset": 1150,
+    "idleMotionGroupName": "Idle",
+    "emotionMap": {
+      "neutral": 0,
+      "anger": 2,
+      "disgust": 2,
+      "fear": 1,
+      "joy": 3,
+      "smirk": 3,
+      "sadness": 1,
+      "surprise": 3
+    },
+    "tapMotions": {
+      "HitAreaHead": {
+        "Idle": 1
+      },
+      "HitAreaBody": {
+        "Idle": 1
+      }
+    }
+  }
 ]
