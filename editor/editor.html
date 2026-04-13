@@ -1770,15 +1770,15 @@ function buildParamSliders() {
     else if (u.includes('BODY') || u.includes('BREATH')) addToGroup('Body', id);
     else if (u.includes('ARM_02') || u.includes('HAND_02')) addToGroup('Arms (B-layer)', id);
     else if (u.includes('ARM') || u.includes('HAND')) addToGroup('Arms (A-layer)', id);
-    else if (u.includes('KAMIYURE')) addToGroup('Hair Physics', id);
+    else if (u.includes('KAMIYURE')) continue; // Skip — driven by physics engine, not user-adjustable
     else if (u.includes('TERE') || u.includes('DONYORI')) addToGroup('Effects', id);
     else addToGroup('Other', id);
   }
 
-  // Also detect arm parts for PartOpacity sliders
+  // Replace Part Visibility with an Arm Layer toggle
   const armParts = getArmPartIds();
   if (armParts.length > 0) {
-    addToGroup('Part Visibility', ...armParts.map(p => `part:${p}`));
+    for (const p of armParts) addToGroup('🔀 Arm Layer', `part:${p}`);
   }
 
   for (const [groupName, paramIds] of groups) {
@@ -1800,6 +1800,80 @@ function buildParamSliders() {
 
     for (const id of paramIds) {
       if (id.startsWith('part:')) {
+        // For arm layer group, add a toggle button instead of raw sliders
+        if (groupName === '🔀 Arm Layer' && !body.querySelector('.arm-layer-toggle')) {
+          const toggleDiv = document.createElement('div');
+          toggleDiv.style.cssText = 'padding: 6px 0; display: flex; gap: 8px; align-items: center;';
+          
+          const btnA = document.createElement('button');
+          btnA.textContent = 'A — Arms Down';
+          btnA.style.cssText = 'flex:1; padding:8px; border:1px solid #555; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s;';
+          
+          const btnB = document.createElement('button');
+          btnB.textContent = 'B — Hands Up';
+          btnB.style.cssText = 'flex:1; padding:8px; border:1px solid #555; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s;';
+          
+          const hint = document.createElement('div');
+          hint.style.cssText = 'font-size:11px; opacity:0.5; padding:4px 0;';
+          hint.textContent = 'Two separate arm artworks — only one visible at a time. Animations can set this too.';
+          
+          function updateArmLayerUI(activeLayer) {
+            const activeStyle = 'background:#2060d0; color:white; border-color:#2060d0;';
+            const inactiveStyle = 'background:#1a1a2e; color:#888; border-color:#555;';
+            if (activeLayer === 'A') {
+              btnA.style.cssText = 'flex:1; padding:8px; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s;' + activeStyle;
+              btnB.style.cssText = 'flex:1; padding:8px; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s;' + inactiveStyle;
+            } else {
+              btnA.style.cssText = 'flex:1; padding:8px; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s;' + inactiveStyle;
+              btnB.style.cssText = 'flex:1; padding:8px; border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s;' + activeStyle;
+            }
+            // Show/hide arm param groups
+            const aGroup = document.querySelector('[data-group="Arms (A-layer)"]');
+            const bGroup = document.querySelector('[data-group="Arms (B-layer)"]');
+            if (aGroup) aGroup.style.display = activeLayer === 'A' ? '' : 'none';
+            if (bGroup) bGroup.style.display = activeLayer === 'B' ? '' : 'none';
+          }
+          
+          function switchToLayer(layer) {
+            if (!live2dModel) return;
+            const im = live2dModel.internalModel;
+            if (im.pose) im.pose = null; // Disable pose manager override
+            const cm = im.coreModel;
+            const rawModel = cm.getModel();
+            for (let i = 0; i < rawModel.parts.ids.length; i++) {
+              const pid = rawModel.parts.ids[i];
+              if (pid.includes('ARM') && pid.includes('_01')) {
+                rawModel.parts.opacities[i] = layer === 'A' ? 1 : 0;
+                if (paramSliders['part:' + pid]) {
+                  paramSliders['part:' + pid].slider.value = layer === 'A' ? 1 : 0;
+                  paramSliders['part:' + pid].valueEl.value = layer === 'A' ? '1.00' : '0.00';
+                }
+              }
+              if (pid.includes('ARM') && pid.includes('_02')) {
+                rawModel.parts.opacities[i] = layer === 'B' ? 1 : 0;
+                if (paramSliders['part:' + pid]) {
+                  paramSliders['part:' + pid].slider.value = layer === 'B' ? 1 : 0;
+                  paramSliders['part:' + pid].valueEl.value = layer === 'B' ? '1.00' : '0.00';
+                }
+              }
+            }
+            updateArmLayerUI(layer);
+            toast(`Arm layer: ${layer === 'A' ? 'Arms Down' : 'Hands Up'}`, 'info');
+          }
+          
+          btnA.addEventListener('click', () => switchToLayer('A'));
+          btnB.addEventListener('click', () => switchToLayer('B'));
+          btnA.classList.add('arm-layer-toggle');
+          
+          toggleDiv.appendChild(btnA);
+          toggleDiv.appendChild(btnB);
+          body.appendChild(toggleDiv);
+          body.appendChild(hint);
+          
+          // Set initial state based on current opacity
+          const currentLayer = getPartOpacity('PARTS_01_ARM_R_02') > 0.5 ? 'B' : 'A';
+          updateArmLayerUI(currentLayer);
+        }
         body.appendChild(createPartSliderRow(id.replace('part:', '')));
       } else {
         body.appendChild(createSliderRow(id));

@@ -7,7 +7,9 @@ Runs on port 8080, separate from the VTuber server (12393).
 
 import json
 import os
+import sys
 import shutil
+import logging
 from pathlib import Path
 from datetime import datetime
 
@@ -16,6 +18,19 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+
+# Force all output to be unbuffered so logs appear in process monitors
+# Uvicorn logs to stderr; redirect stderr to stdout so process monitors see everything
+import io
+sys.stderr = sys.stdout
+
+# Configure logging to go to stdout
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    stream=sys.stdout,
+    force=True,
+)
 
 # Base paths — resolve OLLV directory
 # Priority: OLLV_DIR env var > parent of this script > ~/Open-LLM-VTuber
@@ -43,25 +58,41 @@ if not FRONTEND_DIR.exists():
 
 app = FastAPI(title="Live2D Model Editor")
 
-# CORS for dev
+# CORS — locked to localhost only (editor is a local-only tool)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=[
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:12393",
+        "http://127.0.0.1:12393",
+    ],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 # Serve Live2D SDK libs from OLLV's frontend
-if (FRONTEND_DIR / "libs").exists():
-    app.mount("/frontend/libs", StaticFiles(directory=str(FRONTEND_DIR / "libs"), follow_symlink=True), name="libs")
+_libs_dir = FRONTEND_DIR / "libs"
+if _libs_dir.exists():
+    app.mount("/frontend/libs", StaticFiles(directory=str(_libs_dir), follow_symlink=True), name="libs")
 else:
-    print(f"  WARNING: {FRONTEND_DIR / 'libs'} not found — Live2D Core unavailable")
+    print(f"  CRITICAL: {_libs_dir} not found — Live2D Core unavailable!")
+    print(f"  The editor will NOT work without this. Set OLLV_DIR correctly.")
+
+    @app.get("/frontend/libs/{path:path}")
+    async def missing_libs(path: str):
+        raise HTTPException(503, f"Live2D SDK not found. Set OLLV_DIR to your Open-LLM-VTuber directory. Missing: {_libs_dir}")
 
 # Serve model files (textures, moc3, etc)
 if MODELS_DIR.exists():
     app.mount("/live2d-models", StaticFiles(directory=str(MODELS_DIR), follow_symlink=True), name="models")
 else:
-    print(f"  WARNING: {MODELS_DIR} not found — no models available")
+    print(f"  CRITICAL: {MODELS_DIR} not found — no models available!")
+    print(f"  Set OLLV_DIR to your Open-LLM-VTuber directory.")
+
+    @app.get("/live2d-models/{path:path}")
+    async def missing_models(path: str):
+        raise HTTPException(503, f"Models directory not found. Set OLLV_DIR correctly. Missing: {MODELS_DIR}")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -76,6 +107,8 @@ async def serve_editor():
 @app.get("/api/models")
 async def list_models():
     """List all available Live2D models."""
+    if not MODELS_DIR.exists():
+        raise HTTPException(503, f"Models directory not found: {MODELS_DIR}. Set OLLV_DIR env var.")
     models = []
     for d in sorted(MODELS_DIR.iterdir()):
         if not d.is_dir():
@@ -272,4 +305,4 @@ if __name__ == "__main__":
     print(f"  http://localhost:8080\n")
     print(f"  Models dir: {MODELS_DIR}")
     print(f"  SDK libs:   {FRONTEND_DIR / 'libs'}\n")
-    uvicorn.run(app, host="0.0.0.0", port=8080, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=8080, log_level="info")
