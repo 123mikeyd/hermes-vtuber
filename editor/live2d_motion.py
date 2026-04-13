@@ -206,10 +206,14 @@ class PosePresets:
         'PARAM_BROW_L_FORM': 0.0,
         'PARAM_BROW_R_FORM': 0.0,
         'PARAM_TERE': 0.0,
+        # ARM VALUES: learned from working idle motions (Apr 12 2026)
+        # Right arm: -1.0 = resting/hand at face position
+        # Left arm: 0.0 = resting on desk
+        # Using WRONG values (e.g. 0.0 for right) makes both hands fly up!
         'PARAM_ARM_02_L_01': 0.0,
         'PARAM_ARM_02_L_02': 0.0,
-        'PARAM_ARM_02_R_01': 0.0,
-        'PARAM_ARM_02_R_02': 0.0,
+        'PARAM_ARM_02_R_01': -1.0,
+        'PARAM_ARM_02_R_02': -1.0,
         'PARAM_HAND_02_L': 0.0,
         'PARAM_HAND_02_R': -1.0,
     }
