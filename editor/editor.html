@@ -1966,17 +1966,17 @@ function togglePause() {
   const btn = document.getElementById('btn-pause');
 
   if (motionsPaused) {
-    // Stop all motions and disable the motion manager so it doesn't
-    // start new idle motions. We keep autoUpdate=true so rendering works,
-    // but our frameUpdate ticker callback overrides all parameter values
-    // every frame AFTER the internal update pipeline runs.
+    // Stop all motions and KILL the motion manager's update loop.
+    // stopAllMotions() isn't enough — the manager auto-restarts idle motions.
+    // We replace its update() with a no-op so it can't do anything.
     if (live2dModel) {
-      if (live2dModel.internalModel.motionManager) {
-        live2dModel.internalModel.motionManager.stopAllMotions();
-        // Destroy the motion manager's queues so it can't restart idle motions
-        live2dModel.internalModel.motionManager.expressionManager = null;
+      const mm = live2dModel.internalModel.motionManager;
+      if (mm) {
+        mm.stopAllMotions();
+        mm._savedUpdate = mm.update.bind(mm);
+        mm.update = () => false;  // No-op: prevents idle restart
       }
-      // Disable eye blink and breath so they don't fight our overrides
+      // Also kill eye blink and breath
       if (live2dModel.internalModel.eyeBlink) {
         live2dModel.internalModel._savedEyeBlink = live2dModel.internalModel.eyeBlink;
         live2dModel.internalModel.eyeBlink = null;
@@ -2005,8 +2005,12 @@ function togglePause() {
 
     toast('Animations paused — sliders have full control', 'info');
   } else {
-    // Resume: restore eye blink and breath
+    // Resume: restore motion manager, eye blink, and breath
     if (live2dModel) {
+      const mm = live2dModel.internalModel.motionManager;
+      if (mm && mm._savedUpdate) {
+        mm.update = mm._savedUpdate;
+      }
       if (live2dModel.internalModel._savedEyeBlink) {
         live2dModel.internalModel.eyeBlink = live2dModel.internalModel._savedEyeBlink;
       }
