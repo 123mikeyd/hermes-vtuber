@@ -408,6 +408,11 @@ header h1 {
 }
 
 .motion-item:hover { background: var(--surface2); }
+.motion-item.active {
+  background: rgba(32, 80, 192, 0.25);
+  border-left: 3px solid var(--accent-bright);
+  padding-left: 11px;
+}
 
 .motion-item .group-badge {
   font-size: 10px;
@@ -502,7 +507,13 @@ header h1 {
 }
 
 .seq-keyframe:hover { border-color: var(--accent-bright); }
-.seq-keyframe.active { border-color: var(--accent-bright); background: rgba(32, 80, 192, 0.15); }
+.seq-keyframe.active {
+  border-color: var(--accent-bright);
+  background: rgba(32, 80, 192, 0.3);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5), inset 0 0 6px rgba(59, 130, 246, 0.15);
+}
+.seq-keyframe.active .time { color: #fff; }
+.seq-keyframe.active .label { color: var(--accent-bright); }
 
 .seq-keyframe .time {
   font-size: 11px;
@@ -2062,7 +2073,12 @@ function buildMotionsList() {
         <span>${fileName}</span>
         <span style="color:var(--text-dim);margin-left:auto;font-size:11px">${item.duration.toFixed(1)}s${item.loop ? ' ⟳' : ''} · ${item.curveCount} curves</span>
       `;
-      div.addEventListener('click', () => loadMotionIntoSliders(item.file));
+      div.addEventListener('click', () => {
+        // Highlight this item, un-highlight siblings
+        list.querySelectorAll('.motion-item').forEach(el => el.classList.remove('active'));
+        div.classList.add('active');
+        loadMotionIntoSliders(item.file);
+      });
       list.appendChild(div);
     }
   }
