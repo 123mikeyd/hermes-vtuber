@@ -1,0 +1,18 @@
+diff --git a/src/open_llm_vtuber/server.py b/src/open_llm_vtuber/server.py
+index 7a34b7b..b368a56 100644
+--- a/src/open_llm_vtuber/server.py
++++ b/src/open_llm_vtuber/server.py
+@@ -108,6 +108,13 @@ class WebSocketServer:
+                 init_proxy_route(server_url=server_url),
+             )
+ 
++        # Catch the undefined/undefined.model3.json 404 from frontend
++        # race condition — frontend calls initializeLive2D() before
++        # WebSocket sends the real model config
++        @self.app.get("/undefined/{path:path}")
++        async def catch_undefined_path(path: str):
++            return Response(status_code=204)
++
+         # Mount cache directory first (to ensure audio file access)
+         if not os.path.exists("cache"):
+             os.makedirs("cache")
