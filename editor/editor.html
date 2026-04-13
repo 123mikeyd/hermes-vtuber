@@ -1106,6 +1106,14 @@ function frameUpdate() {
   for (const [paramId, val] of Object.entries(overrideValues)) {
     coreModel.setParameterValueById(paramId, val);
   }
+  // With autoUpdate=false, we must manually trigger the model update
+  // so vertex positions recalculate and the renderer draws the new pose
+  coreModel.update();
+  // Force a render — the PIXI ticker is still running, it just doesn't
+  // call the Live2D internal update anymore
+  if (live2dModel.internalModel.renderer) {
+    live2dModel.internalModel.draw(pixiApp.renderer.gl);
+  }
 }
 
 // ============================================================
@@ -1185,7 +1193,7 @@ function buildPartParamMapping() {
   const allParams = Object.keys(paramDefaults);
 
   const PART_PARAM_RULES = {
-    'Head':       p => /ANGLE|HEAD|DESK/i.test(p),
+    'Head':       p => /^PARAM_(ANGLE|HEAD)/i.test(p),
     'Eyes':       p => /EYE/i.test(p),
     'Left Eye':   p => /EYE.*L|EYE_BALL/i.test(p),
     'Right Eye':  p => /EYE.*R|EYE_BALL/i.test(p),
@@ -1213,6 +1221,45 @@ function buildPartParamMapping() {
   }
   if (partParamMap['Right Arm'].length === 0 && partParamMap['Arms'].length > 0) {
     partParamMap['Right Arm'] = [...partParamMap['Arms']];
+  }
+
+  // Filter arm params to only the VISIBLE layer.
+  // hermes_dark has layer 01 (A) and layer 02 (B) — only one is visible.
+  // Check which arm parts have opacity > 0 and match params accordingly.
+  if (live2dModel) {
+    const coreModel = live2dModel.internalModel.coreModel;
+    const rawModel = coreModel.getModel();
+    const partIds = rawModel.parts.ids;
+    let visibleLayer = null;
+    for (let i = 0; i < partIds.length; i++) {
+      if (partIds[i].toUpperCase().includes('ARM') && partIds[i].includes('_02')) {
+        if (coreModel.getPartOpacityByIndex(i) > 0.5) { visibleLayer = '02'; break; }
+      }
+      if (partIds[i].toUpperCase().includes('ARM') && partIds[i].includes('_01')) {
+        if (coreModel.getPartOpacityByIndex(i) > 0.5 && !visibleLayer) { visibleLayer = '01'; }
+      }
+    }
+
+    if (visibleLayer === '02') {
+      // Only keep _02 params (B-layer)
+      const filterTo02 = params => params.filter(p => /ARM_02|HAND_02/i.test(p));
+      partParamMap['Left Arm'] = filterTo02(partParamMap['Left Arm']);
+      partParamMap['Right Arm'] = filterTo02(partParamMap['Right Arm']);
+      partParamMap['Arms'] = filterTo02(partParamMap['Arms']);
+      // If L/R are empty after filtering (params don't have L/R), split Arms
+      if (partParamMap['Left Arm'].length === 0) {
+        partParamMap['Left Arm'] = partParamMap['Arms'].filter(p => /(_L_|_L$)/i.test(p));
+      }
+      if (partParamMap['Right Arm'].length === 0) {
+        partParamMap['Right Arm'] = partParamMap['Arms'].filter(p => /(_R_|_R$)/i.test(p));
+      }
+    } else if (visibleLayer === '01') {
+      // Only keep non-_02 params (A-layer)
+      const filterTo01 = params => params.filter(p => !/ARM_02|HAND_02/i.test(p));
+      partParamMap['Left Arm'] = filterTo01(partParamMap['Left Arm']);
+      partParamMap['Right Arm'] = filterTo01(partParamMap['Right Arm']);
+      partParamMap['Arms'] = filterTo01(partParamMap['Arms']);
+    }
   }
 
   // Head also includes angle params
@@ -1922,9 +1969,15 @@ function togglePause() {
   const btn = document.getElementById('btn-pause');
 
   if (motionsPaused) {
-    // Stop all motions so sliders have full control
-    if (live2dModel && live2dModel.internalModel.motionManager) {
-      live2dModel.internalModel.motionManager.stopAllMotions();
+    // HARD STOP: Disable the entire internal update pipeline.
+    // stopAllMotions() alone isn't enough — pixi-live2d-display still runs
+    // physics, breath, eye blink, and expressions every frame which override
+    // our slider values. We need to kill the autoUpdate flag.
+    if (live2dModel) {
+      live2dModel.autoUpdate = false;  // Stop pixi-live2d-display's ticker
+      if (live2dModel.internalModel.motionManager) {
+        live2dModel.internalModel.motionManager.stopAllMotions();
+      }
     }
     btn.innerHTML = '&#x25B6; Resume Animations';
     btn.style.borderColor = 'var(--warn)';
@@ -1945,6 +1998,10 @@ function togglePause() {
 
     toast('Animations paused — sliders have full control', 'info');
   } else {
+    // Resume: re-enable autoUpdate so motions/physics/breath work again
+    if (live2dModel) {
+      live2dModel.autoUpdate = true;
+    }
     btn.innerHTML = '&#x23F8; Pause Animations';
     btn.style.borderColor = '';
     btn.style.color = '';
