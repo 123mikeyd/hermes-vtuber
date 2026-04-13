@@ -1102,17 +1102,14 @@ function readModelParams() {
 
 function frameUpdate() {
   if (!motionsPaused || !live2dModel) return;
+  // The model's autoUpdate is still true so pixi-live2d-display handles
+  // rendering. But its update pipeline sets parameters from motions/physics.
+  // We override AFTER by forcing our values every frame via the ticker.
+  // This works because PIXI ticker callbacks run in order — our frameUpdate
+  // was added AFTER the model's internal ticker, so we get the last word.
   const coreModel = live2dModel.internalModel.coreModel;
   for (const [paramId, val] of Object.entries(overrideValues)) {
     coreModel.setParameterValueById(paramId, val);
-  }
-  // With autoUpdate=false, we must manually trigger the model update
-  // so vertex positions recalculate and the renderer draws the new pose
-  coreModel.update();
-  // Force a render — the PIXI ticker is still running, it just doesn't
-  // call the Live2D internal update anymore
-  if (live2dModel.internalModel.renderer) {
-    live2dModel.internalModel.draw(pixiApp.renderer.gl);
   }
 }
 
@@ -1969,14 +1966,24 @@ function togglePause() {
   const btn = document.getElementById('btn-pause');
 
   if (motionsPaused) {
-    // HARD STOP: Disable the entire internal update pipeline.
-    // stopAllMotions() alone isn't enough — pixi-live2d-display still runs
-    // physics, breath, eye blink, and expressions every frame which override
-    // our slider values. We need to kill the autoUpdate flag.
+    // Stop all motions and disable the motion manager so it doesn't
+    // start new idle motions. We keep autoUpdate=true so rendering works,
+    // but our frameUpdate ticker callback overrides all parameter values
+    // every frame AFTER the internal update pipeline runs.
     if (live2dModel) {
-      live2dModel.autoUpdate = false;  // Stop pixi-live2d-display's ticker
       if (live2dModel.internalModel.motionManager) {
         live2dModel.internalModel.motionManager.stopAllMotions();
+        // Destroy the motion manager's queues so it can't restart idle motions
+        live2dModel.internalModel.motionManager.expressionManager = null;
+      }
+      // Disable eye blink and breath so they don't fight our overrides
+      if (live2dModel.internalModel.eyeBlink) {
+        live2dModel.internalModel._savedEyeBlink = live2dModel.internalModel.eyeBlink;
+        live2dModel.internalModel.eyeBlink = null;
+      }
+      if (live2dModel.internalModel.breath) {
+        live2dModel.internalModel._savedBreath = live2dModel.internalModel.breath;
+        live2dModel.internalModel.breath = null;
       }
     }
     btn.innerHTML = '&#x25B6; Resume Animations';
@@ -1998,9 +2005,14 @@ function togglePause() {
 
     toast('Animations paused — sliders have full control', 'info');
   } else {
-    // Resume: re-enable autoUpdate so motions/physics/breath work again
+    // Resume: restore eye blink and breath
     if (live2dModel) {
-      live2dModel.autoUpdate = true;
+      if (live2dModel.internalModel._savedEyeBlink) {
+        live2dModel.internalModel.eyeBlink = live2dModel.internalModel._savedEyeBlink;
+      }
+      if (live2dModel.internalModel._savedBreath) {
+        live2dModel.internalModel.breath = live2dModel.internalModel._savedBreath;
+      }
     }
     btn.innerHTML = '&#x23F8; Pause Animations';
     btn.style.borderColor = '';
