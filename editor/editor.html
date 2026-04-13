@@ -479,7 +479,7 @@ header h1 {
 }
 
 .sequencer-timeline:empty::after {
-  content: "Click ⊕ STAMP to capture current pose as a keyframe";
+  content: "Click ⊕ STAMP to capture current pose as a keyframe — or click & drag the model";
   color: var(--text-dim);
   font-size: 11px;
   font-style: italic;
@@ -558,6 +558,116 @@ header h1 {
 }
 
 .seq-time-input:focus { border-bottom-color: var(--accent-bright); }
+
+/* ===== Curve connector between keyframes ===== */
+.seq-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.seq-connector .duration {
+  font-size: 10px;
+  color: var(--accent-bright);
+  font-weight: bold;
+}
+
+.seq-connector .curve-canvas {
+  width: 48px;
+  height: 28px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: border-color 0.15s;
+  cursor: grab;
+}
+
+.seq-connector:hover .curve-canvas {
+  border-color: var(--accent-bright);
+}
+
+.seq-connector .curve-label {
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+/* ===== Time prompt modal ===== */
+.time-prompt-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.time-prompt {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 16px 24px;
+  min-width: 260px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.2s ease-out;
+}
+
+.time-prompt h4 {
+  font-size: 13px;
+  color: var(--accent-bright);
+  margin-bottom: 10px;
+}
+
+.time-prompt label {
+  font-size: 12px;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.time-prompt input[type="number"] {
+  width: 80px;
+  padding: 4px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: center;
+}
+
+.time-prompt .btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.time-prompt button {
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+}
+
+.time-prompt .btn-ok {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: bold;
+}
+
+.time-prompt .btn-ok:hover { background: var(--accent-bright); }
+.time-prompt .btn-skip { background: var(--surface2); color: var(--text-dim); }
+.time-prompt .btn-skip:hover { color: var(--text); }
 
 /* ===== Toast messages ===== */
 .toast {
@@ -713,7 +823,7 @@ header h1 {
     <div class="canvas-info" id="canvas-info">No model</div>
     <div class="canvas-controls">
       <button class="canvas-btn" id="btn-reset" title="Reset all parameters to defaults">Reset</button>
-      <button class="canvas-btn" id="btn-pause" title="Pause/resume auto motions to control sliders freely">&#x23F8; Pause Motions</button>
+      <button class="canvas-btn" id="btn-pause" title="Pause/resume animations to control sliders freely">&#x23F8; Pause Animations</button>
     </div>
     <div class="loading-overlay" id="loading" style="display: none;">
       <div class="spinner"></div>
@@ -737,11 +847,11 @@ header h1 {
     <!-- Sequencer (keyframe timeline) -->
     <div class="sequencer" id="sequencer">
       <div class="sequencer-header">
-        <h4>&#x23F1; Sequencer</h4>
+        <h4>&#x23F1; Animation Sequencer</h4>
         <span class="count" id="seq-count">0 keyframes</span>
         <div style="margin-left:auto; display:flex; gap:4px;">
           <button class="seq-btn stamp" id="seq-stamp" title="Capture current slider values as a keyframe">&#x2295; STAMP</button>
-          <button class="seq-btn" id="seq-preview" title="Play back the sequence on the model">&#x25B6; Preview</button>
+          <button class="seq-btn" id="seq-preview" title="Play back the animation on the model">&#x25B6; Play</button>
           <button class="seq-btn" id="seq-clear" title="Clear all keyframes">Clear</button>
         </div>
       </div>
@@ -751,7 +861,7 @@ header h1 {
     <!-- Existing motions list -->
     <div class="motions-panel" id="motions-panel" style="display: none;">
       <div class="motions-panel-header" id="motions-toggle">
-        &#x25BC; Saved Motions <span id="motions-count" style="opacity:0.6"></span>
+        &#x25BC; Saved Animations <span id="motions-count" style="opacity:0.6"></span>
       </div>
       <div id="motions-list"></div>
     </div>
@@ -943,6 +1053,12 @@ async function loadModel(name) {
     // Initialize direct manipulation (click-drag posing)
     cacheDrawableData();
     initDragInteraction();
+
+    // Auto-pause animations so the user can pose immediately
+    // (Pose Studio should start ready for posing, not with animations playing)
+    if (!motionsPaused) {
+      togglePause();
+    }
 
     // Canvas info
     document.getElementById('canvas-info').textContent =
@@ -1229,13 +1345,23 @@ function hitTestDrawables(canvasX, canvasY) {
   // ZERO PASS: If we directly hit an arm/hand ART MESH (not a ref box),
   // that takes priority. This handles models where the hands are positioned
   // over the head/mouth ref area (e.g. hermes_dark hands-near-chin pose).
+  // Use X position to determine left vs right arm.
   const artMeshHit = allHits.find(h =>
     !h.id.startsWith('D_REF') &&
     !h.id.startsWith('D_BACKGROUND') &&
     (getPartGroup(h.id) === 'Arms' || getPartGroup(h.id) === 'Left Arm' || getPartGroup(h.id) === 'Right Arm')
   );
   if (artMeshHit) {
-    artMeshHit._overrideGroup = getPartGroup(artMeshHit.id);
+    let group = getPartGroup(artMeshHit.id);
+    // If generic "Arms", use click X position to determine which arm.
+    // Model center X = originalWidth / 2. Click left of center = character's right arm.
+    // Click right of center = character's left arm.
+    // (We're looking at the character face-on, so screen-left = character's right.)
+    if (group === 'Arms') {
+      const centerX = im.originalWidth / 2;
+      group = localX < centerX ? 'Right Arm' : 'Left Arm';
+    }
+    artMeshHit._overrideGroup = group;
     return artMeshHit;
   }
 
@@ -1800,15 +1926,14 @@ function togglePause() {
     if (live2dModel && live2dModel.internalModel.motionManager) {
       live2dModel.internalModel.motionManager.stopAllMotions();
     }
-    btn.innerHTML = '&#x25B6; Resume Motions';
+    btn.innerHTML = '&#x25B6; Resume Animations';
     btn.style.borderColor = 'var(--warn)';
     btn.style.color = 'var(--warn)';
 
     // Capture current param values into overrides
     const coreModel = live2dModel.internalModel.coreModel;
-    const values = coreModel.getParameterValues();
     for (const [paramId, info] of Object.entries(paramDefaults)) {
-      const current = values[info.index];
+      const current = coreModel.getParameterValueByIndex(info.index);
       overrideValues[paramId] = current;
       if (paramSliders[paramId]) {
         paramSliders[paramId].slider.value = current;
@@ -1818,12 +1943,12 @@ function togglePause() {
       }
     }
 
-    toast('Motions paused — sliders have full control', 'info');
+    toast('Animations paused — sliders have full control', 'info');
   } else {
-    btn.innerHTML = '&#x23F8; Pause Motions';
+    btn.innerHTML = '&#x23F8; Pause Animations';
     btn.style.borderColor = '';
     btn.style.color = '';
-    toast('Motions resumed', 'info');
+    toast('Animations resumed', 'info');
   }
 }
 
@@ -2073,8 +2198,8 @@ function makeBezierDrift(v1, v2, v3, duration) {
 //  Sequencer — stamp poses, build motions from keyframes
 // ============================================================
 
-let seqKeyframes = [];  // [{time, params: {}, parts: {}, label}]
-let seqPreviewActive = false;
+let seqKeyframes = [];  // [{time, params: {}, parts: {}, label, easing: 0.5}]
+var seqPreviewActive = false;
 
 function initSequencer() {
   document.getElementById('seq-stamp').addEventListener('click', seqStamp);
@@ -2098,10 +2223,6 @@ function seqStamp() {
     }
   }
 
-  // Auto-calculate time: 3s after last keyframe, or 0 for first
-  const time = seqKeyframes.length === 0 ? 0 :
-    seqKeyframes[seqKeyframes.length - 1].time + 3.0;
-
   // Detect which params differ from defaults to make a label
   const diffs = [];
   for (const [pid, val] of Object.entries(params)) {
@@ -2113,9 +2234,71 @@ function seqStamp() {
   }
   const label = diffs.length > 0 ? diffs.slice(0, 3).join(', ') : 'pose';
 
-  seqKeyframes.push({ time, params, parts, label });
-  renderSequencer();
-  toast(`Keyframe ${seqKeyframes.length} stamped at ${time.toFixed(1)}s`, 'success');
+  // For the FIRST keyframe, time is always 0, no prompt needed
+  if (seqKeyframes.length === 0) {
+    seqKeyframes.push({ time: 0, params, parts, label, easing: 0.5 });
+    renderSequencer();
+    toast('First keyframe stamped (start pose)', 'success');
+    return;
+  }
+
+  // For subsequent keyframes, ask the user how long to reach this pose
+  const lastTime = seqKeyframes[seqKeyframes.length - 1].time;
+  showTimePrompt(lastTime, (duration) => {
+    const time = lastTime + duration;
+    seqKeyframes.push({ time, params, parts, label, easing: 0.5 });
+    renderSequencer();
+    toast(`Keyframe ${seqKeyframes.length} stamped at ${time.toFixed(1)}s (${duration.toFixed(1)}s transition)`, 'success');
+  });
+}
+
+// Modal prompt for transition duration
+function showTimePrompt(lastTime, callback) {
+  const overlay = document.createElement('div');
+  overlay.className = 'time-prompt-overlay';
+  overlay.innerHTML = `
+    <div class="time-prompt">
+      <h4>⏱ Transition Time</h4>
+      <label>How long to reach this pose? (seconds)</label>
+      <input type="number" id="time-input" value="1.0" min="0.1" max="30" step="0.1" autofocus>
+      <div style="margin-top:6px; font-size:11px; color:var(--text-dim)">
+        0.2s = quick blink &nbsp;|&nbsp; 1s = normal &nbsp;|&nbsp; 3s = slow drift
+      </div>
+      <div class="btn-row">
+        <button class="btn-skip" id="time-skip">Cancel</button>
+        <button class="btn-ok" id="time-ok">⊕ Stamp</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = document.getElementById('time-input');
+  input.select();
+
+  const finish = (duration) => {
+    overlay.remove();
+    if (duration !== null) callback(duration);
+  };
+
+  document.getElementById('time-ok').addEventListener('click', () => {
+    const v = parseFloat(input.value);
+    finish(isNaN(v) || v <= 0 ? 1.0 : v);
+  });
+
+  document.getElementById('time-skip').addEventListener('click', () => finish(null));
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const v = parseFloat(input.value);
+      finish(isNaN(v) || v <= 0 ? 1.0 : v);
+    }
+    if (e.key === 'Escape') finish(null);
+  });
+
+  // Click outside to cancel
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) finish(null);
+  });
 }
 
 function seqRemove(index) {
@@ -2182,7 +2365,7 @@ async function seqPreview() {
 
   if (seqPreviewActive) {
     seqPreviewActive = false;
-    document.getElementById('seq-preview').innerHTML = '&#x25B6; Preview';
+    document.getElementById('seq-preview').innerHTML = '&#x25B6; Play';
     return;
   }
 
@@ -2213,13 +2396,25 @@ async function seqPreview() {
       }
     }
 
-    // Lerp between keyframes
+    // Lerp between keyframes using per-keyframe easing curve
     const dt = kfB.time - kfA.time;
     const progress = dt > 0 ? (t - kfA.time) / dt : 0;
-    // Smooth ease-in-out
-    const ease = progress < 0.5 ?
-      2 * progress * progress :
-      1 - Math.pow(-2 * progress + 2, 2) / 2;
+    // Apply easing based on the keyframe's easing parameter
+    // easing=0: ease-out, 0.5: symmetric, 1: ease-in
+    const easingVal = kfB.easing ?? 0.5;
+    let ease;
+    if (easingVal < 0.3) {
+      // Ease-out (fast start, slow end)
+      ease = 1 - Math.pow(1 - progress, 2);
+    } else if (easingVal > 0.7) {
+      // Ease-in (slow start, fast end)
+      ease = progress * progress;
+    } else {
+      // Ease-in-out (smooth both ends)
+      ease = progress < 0.5 ?
+        2 * progress * progress :
+        1 - Math.pow(-2 * progress + 2, 2) / 2;
+    }
 
     // Apply interpolated values
     for (const paramId of Object.keys(kfA.params)) {
@@ -2247,11 +2442,77 @@ function renderSequencer() {
   count.textContent = `${seqKeyframes.length} keyframe${seqKeyframes.length !== 1 ? 's' : ''}`;
 
   seqKeyframes.forEach((kf, i) => {
+    // Draw curve connector BEFORE each keyframe (except the first)
     if (i > 0) {
-      const arrow = document.createElement('span');
-      arrow.className = 'seq-arrow';
-      arrow.textContent = '→';
-      timeline.appendChild(arrow);
+      const prevKf = seqKeyframes[i - 1];
+      const duration = (kf.time - prevKf.time).toFixed(1);
+      const easing = kf.easing ?? 0.5;
+
+      const connector = document.createElement('div');
+      connector.className = 'seq-connector';
+      connector.title = `${duration}s transition — click to change, drag curve to adjust easing`;
+
+      const durLabel = document.createElement('span');
+      durLabel.className = 'duration';
+      durLabel.textContent = `${duration}s`;
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'curve-canvas';
+      canvas.width = 48;
+      canvas.height = 28;
+      drawEasingCurve(canvas, easing);
+
+      // Click on duration to change time
+      durLabel.style.cursor = 'pointer';
+      durLabel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const newDur = prompt(`Transition duration (seconds):`, duration);
+        if (newDur !== null) {
+          const d = parseFloat(newDur);
+          if (!isNaN(d) && d > 0) {
+            kf.time = prevKf.time + d;
+            // Shift all subsequent keyframes
+            for (let j = i + 1; j < seqKeyframes.length; j++) {
+              const gap = seqKeyframes[j].time - seqKeyframes[j-1].time;
+              if (gap < 0.1) seqKeyframes[j].time = seqKeyframes[j-1].time + 0.1;
+            }
+            renderSequencer();
+          }
+        }
+      });
+
+      // Drag on curve canvas to adjust easing
+      let dragging = false;
+      canvas.addEventListener('mousedown', (e) => {
+        dragging = true;
+        e.stopPropagation();
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const rect = canvas.getBoundingClientRect();
+        // Map Y position to easing: top = 0 (linear start), bottom = 1 (ease end)
+        // Center = 0.5 (symmetric ease-in-out)
+        const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+        kf.easing = y;
+        drawEasingCurve(canvas, y);
+      });
+      document.addEventListener('mouseup', () => {
+        if (dragging) {
+          dragging = false;
+          renderSequencer();  // Refresh labels
+        }
+      });
+
+      const easeName = easing < 0.3 ? 'ease-out' : easing > 0.7 ? 'ease-in' : 'ease-in-out';
+      const easeLabel = document.createElement('span');
+      easeLabel.className = 'curve-label';
+      easeLabel.textContent = easeName;
+
+      connector.appendChild(durLabel);
+      connector.appendChild(canvas);
+      connector.appendChild(easeLabel);
+      timeline.appendChild(connector);
     }
 
     const div = document.createElement('div');
@@ -2285,6 +2546,43 @@ function renderSequencer() {
     div.appendChild(remove);
     timeline.appendChild(div);
   });
+}
+
+// Draw a mini bezier easing curve on a canvas
+// easing: 0 = ease-out (fast start, slow end), 0.5 = symmetric, 1 = ease-in (slow start, fast end)
+function drawEasingCurve(canvas, easing) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw a bezier from bottom-left to top-right
+  // Control point Y determines the curve shape
+  const cp1y = h - (1 - easing) * h;  // First control point
+  const cp2y = easing * h;             // Second control point
+
+  // Background line (straight = constant speed reference)
+  ctx.strokeStyle = '#2a3654';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(2, h - 2);
+  ctx.lineTo(w - 2, 2);
+  ctx.stroke();
+
+  // The easing curve
+  ctx.strokeStyle = '#3b82f6';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(2, h - 2);
+  ctx.bezierCurveTo(w * 0.33, cp1y, w * 0.67, cp2y, w - 2, 2);
+  ctx.stroke();
+
+  // Dot showing the control point area
+  const dotY = (cp1y + cp2y) / 2;
+  ctx.fillStyle = '#3b82f6';
+  ctx.beginPath();
+  ctx.arc(w / 2, dotY, 3, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 // Override saveMotion to use sequencer keyframes if present
