@@ -52,10 +52,16 @@ app.add_middleware(
 )
 
 # Serve Live2D SDK libs from OLLV's frontend
-app.mount("/frontend/libs", StaticFiles(directory=str(FRONTEND_DIR / "libs")), name="libs")
+if (FRONTEND_DIR / "libs").exists():
+    app.mount("/frontend/libs", StaticFiles(directory=str(FRONTEND_DIR / "libs"), follow_symlink=True), name="libs")
+else:
+    print(f"  WARNING: {FRONTEND_DIR / 'libs'} not found — Live2D Core unavailable")
 
 # Serve model files (textures, moc3, etc)
-app.mount("/live2d-models", StaticFiles(directory=str(MODELS_DIR)), name="models")
+if MODELS_DIR.exists():
+    app.mount("/live2d-models", StaticFiles(directory=str(MODELS_DIR), follow_symlink=True), name="models")
+else:
+    print(f"  WARNING: {MODELS_DIR} not found — no models available")
 
 
 @app.get("/", response_class=HTMLResponse)

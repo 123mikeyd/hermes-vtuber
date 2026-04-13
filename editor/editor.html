@@ -577,6 +577,86 @@ header h1 {
 .toast.error { background: #7f1d1d; color: #fca5a5; border: 1px solid #ef4444; }
 .toast.info { background: #1e3a5f; color: #93c5fd; border: 1px solid #3b82f6; }
 
+/* ===== Direct Manipulation (click-drag) ===== */
+#live2d-canvas.drag-mode { cursor: grab; }
+#live2d-canvas.dragging { cursor: grabbing; }
+
+.drag-tooltip {
+  position: absolute;
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent-bright);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--accent-bright);
+  pointer-events: none;
+  z-index: 40;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  transition: opacity 0.15s;
+}
+
+.drag-prompt {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+  z-index: 45;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.drag-prompt button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+}
+
+.drag-prompt .btn-stamp {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: bold;
+}
+
+.drag-prompt .btn-stamp:hover { background: var(--accent-bright); }
+.drag-prompt .btn-cancel { background: var(--surface2); color: var(--text-dim); }
+.drag-prompt .btn-cancel:hover { color: var(--text); }
+
+.part-label {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  background: rgba(32, 80, 192, 0.2);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--accent-bright);
+  pointer-events: none;
+  z-index: 40;
+  transition: opacity 0.2s;
+}
+
 /* ===== Loading overlay ===== */
 .loading-overlay {
   position: absolute;
@@ -607,7 +687,7 @@ header h1 {
 
 <!-- ===== Header ===== -->
 <header>
-  <h1>&#x2726; Live2D Editor</h1>
+  <h1>&#x2726; Hermes Avatar Platform</h1>
   <select id="model-select" class="model-select">
     <option value="">Loading models...</option>
   </select>
@@ -706,15 +786,15 @@ header h1 {
 
 const API = '';  // same origin
 
-// State
-let currentModel = null;
-let modelInfo = null;
-let pixiApp = null;
-let live2dModel = null;
-let motionsPaused = false;
-let paramDefaults = {};   // {paramId: {min, max, default, index}}
-let paramSliders = {};    // {paramId: {slider, valueEl, min, max, default}}
-let overrideValues = {};  // When paused, these values get forced each frame
+// State — use var for browser console / debug access
+var currentModel = null;
+var modelInfo = null;
+var pixiApp = null;
+var live2dModel = null;
+var motionsPaused = false;
+var paramDefaults = {};   // {paramId: {min, max, default, index}}
+var paramSliders = {};    // {paramId: {slider, valueEl, min, max, default}}
+var overrideValues = {};  // When paused, these values get forced each frame
 
 // ============================================================
 //  Init
@@ -793,9 +873,24 @@ async function loadModel(name) {
       pixiApp = null;
     }
 
-    // Create PIXI app
+    // Remove stale drag UI elements from previous model
+    if (dragTooltip && dragTooltip.parentNode) dragTooltip.parentNode.removeChild(dragTooltip);
+    if (partLabel && partLabel.parentNode) partLabel.parentNode.removeChild(partLabel);
+    dragTooltip = null;
+    partLabel = null;
+    dragState = null;
+    drawableData = null;
+    hoveredPart = null;
+
+    // Create PIXI app — recreate canvas since destroy(true) removes the DOM element
     const wrap = document.getElementById('canvas-wrap');
-    const canvas = document.getElementById('live2d-canvas');
+    let canvas = document.getElementById('live2d-canvas');
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.id = 'live2d-canvas';
+      canvas.classList.add('drag-mode');
+      wrap.insertBefore(canvas, wrap.firstChild);
+    }
     canvas.width = wrap.clientWidth;
     canvas.height = wrap.clientHeight;
 
@@ -840,9 +935,14 @@ async function loadModel(name) {
     // Build UI
     buildParamSliders();
     buildMotionsList();
+    buildPartParamMapping();
 
     // Install our frame update hook for override mode
     pixiApp.ticker.add(frameUpdate);
+
+    // Initialize direct manipulation (click-drag posing)
+    cacheDrawableData();
+    initDragInteraction();
 
     // Canvas info
     document.getElementById('canvas-info').textContent =
@@ -890,6 +990,577 @@ function frameUpdate() {
   for (const [paramId, val] of Object.entries(overrideValues)) {
     coreModel.setParameterValueById(paramId, val);
   }
+}
+
+// ============================================================
+//  Direct Manipulation — Click-Drag Posing (Phase 1)
+// ============================================================
+
+// State for drag interaction — var for debug access
+var dragState = null;      // {partName, paramMap, startPos, startValues}
+var drawableData = null;   // cached drawable info for hit testing
+var partParamMap = null;   // ArtMesh group → controlling parameters
+var hoveredPart = null;    // currently hovered part group name
+var dragTooltip = null;    // tooltip DOM element
+var partLabel = null;      // top label DOM element
+
+// Helper: get effective part group, respecting _overrideGroup from hit-area detection
+function getHitPartGroup(drawable) {
+  return drawable._overrideGroup || getPartGroup(drawable.id);
+}
+
+// ===== ArtMesh name → logical body part grouping =====
+// Groups many ArtMeshes into "parts" the user cares about
+function getPartGroup(meshId) {
+  const u = meshId.toUpperCase();
+  // Order matters — more specific patterns first
+
+  // Handle both "ArtMesh_*" and "D_*" naming conventions
+  // Arm/Hand detection (both naming schemes)
+  if ((u.includes('ARM') || u.includes('HAND')) && (u.includes('_R') || u.includes('_R_')))  return 'Right Arm';
+  if ((u.includes('ARM') || u.includes('HAND')) && (u.includes('_L') || u.includes('_L_')))  return 'Left Arm';
+  // D_HAND_* without L/R → generic "Arms" (hermes_dark style)
+  if (u.startsWith('D_HAND'))    return 'Arms';
+  if (u.includes('ARM'))         return 'Arms';
+
+  // Eyes
+  if (u.includes('EYE_BALL'))    return 'Eyes';
+  if (u.includes('EYEBALL'))     return 'Eyes';
+  if (u.includes('EYE') && u.includes('_L'))   return 'Left Eye';
+  if (u.includes('EYE') && u.includes('_R'))   return 'Right Eye';
+  if (u.startsWith('D_EYE'))     return 'Eyes';
+  if (u.includes('EYE'))         return 'Eyes';
+
+  // Brows
+  if (u.includes('BROW') && u.includes('_L'))  return 'Left Brow';
+  if (u.includes('BROW') && u.includes('_R'))  return 'Right Brow';
+  if (u.startsWith('D_BROW'))    return 'Brows';
+  if (u.includes('BROW'))        return 'Brows';
+
+  // Face parts
+  if (u.includes('MOUTH') || u.includes('LIP'))    return 'Mouth';
+  if (u.includes('NOSE') || u.includes('HOHO'))     return 'Face';
+  if (u.includes('CHEEK'))                          return 'Face';
+
+  // Hair
+  if (u.includes('HAIR'))        return 'Hair';
+
+  // Body
+  if (u.includes('BODY') || u.includes('BUST') || u.includes('NECK')) return 'Body';
+
+  // Head / Face
+  if (u.includes('HEAD') || u.includes('FACE') || u.includes('EAR')
+      || u.includes('SKIN') || u.includes('FACESHADOW'))  return 'Head';
+
+  // Clothing
+  if (u.includes('CLOTH') || u.includes('RIBBON') || u.includes('TIE')
+      || u.includes('COLLAR') || u.includes('SLEEVE'))    return 'Clothing';
+
+  // Background / reference (non-interactive)
+  if (u.includes('BACKGROUND') || u.includes('REF'))      return 'Background';
+
+  return 'Other';
+}
+
+// ===== Part group → parameters that control it =====
+// Uses naming heuristics + can be refined with sensitivity analysis
+function buildPartParamMapping() {
+  partParamMap = {};
+  const allParams = Object.keys(paramDefaults);
+
+  const PART_PARAM_RULES = {
+    'Head':       p => /ANGLE|HEAD|DESK/i.test(p),
+    'Eyes':       p => /EYE/i.test(p),
+    'Left Eye':   p => /EYE.*L|EYE_BALL/i.test(p),
+    'Right Eye':  p => /EYE.*R|EYE_BALL/i.test(p),
+    'Brows':      p => /BROW/i.test(p),
+    'Left Brow':  p => /BROW.*L/i.test(p),
+    'Right Brow': p => /BROW.*R/i.test(p),
+    'Mouth':      p => /MOUTH/i.test(p),
+    'Face':       p => /MOUTH|BROW|EYE/i.test(p),
+    'Body':       p => /BODY|BREATH/i.test(p),
+    'Arms':       p => /ARM|HAND/i.test(p),
+    'Right Arm':  p => /ARM.*R|HAND.*R/i.test(p),
+    'Left Arm':   p => /ARM.*L|HAND.*L/i.test(p),
+    'Hair':       p => /HAIR|KAMIYURE/i.test(p),
+    'Clothing':   p => /BODY/i.test(p),
+    'Background': p => false,  // background is not animatable
+  };
+
+  for (const [partName, matcher] of Object.entries(PART_PARAM_RULES)) {
+    partParamMap[partName] = allParams.filter(matcher);
+  }
+
+  // Fallback: if Left/Right Arm have no params, use generic Arms mapping
+  if (partParamMap['Left Arm'].length === 0 && partParamMap['Arms'].length > 0) {
+    partParamMap['Left Arm'] = [...partParamMap['Arms']];
+  }
+  if (partParamMap['Right Arm'].length === 0 && partParamMap['Arms'].length > 0) {
+    partParamMap['Right Arm'] = [...partParamMap['Arms']];
+  }
+
+  // Head also includes angle params
+  if (!partParamMap['Head']) partParamMap['Head'] = [];
+
+  // Fallback: if "Other" is clicked, show body params
+  partParamMap['Other'] = partParamMap['Body'] || [];
+}
+
+// ===== Drag sensitivity: how mouse pixels map to parameter changes =====
+const DRAG_SENSITIVITY = {
+  'PARAM_ANGLE_X':          { axis: 'x', scale: 0.25 },
+  'PARAM_ANGLE_Y':          { axis: 'y', scale: -0.25 },
+  'PARAM_ANGLE_Z':          { axis: 'x', scale: 0.15 },
+  'PARAM_BODY_ANGLE_X':     { axis: 'x', scale: 0.12 },
+  'PARAM_BODY_ANGLE_Y':     { axis: 'y', scale: -0.12 },
+  'PARAM_BODY_ANGLE_Z':     { axis: 'x', scale: 0.10 },
+  'PARAM_EYE_L_OPEN':       { axis: 'y', scale: -0.6 },
+  'PARAM_EYE_R_OPEN':       { axis: 'y', scale: -0.6 },
+  'PARAM_EYE_BALL_X':       { axis: 'x', scale: 0.5 },
+  'PARAM_EYE_BALL_Y':       { axis: 'y', scale: -0.5 },
+  'PARAM_BROW_L_Y':         { axis: 'y', scale: -0.4 },
+  'PARAM_BROW_R_Y':         { axis: 'y', scale: -0.4 },
+  'PARAM_MOUTH_OPEN_Y':     { axis: 'y', scale: 0.5 },
+  'PARAM_MOUTH_FORM':       { axis: 'x', scale: 0.4 },
+  'PARAM_BREATH':           { axis: 'y', scale: -0.3 },
+};
+
+// Default for any param not in the table above
+function getParamSensitivity(paramId) {
+  if (DRAG_SENSITIVITY[paramId]) return DRAG_SENSITIVITY[paramId];
+  const u = paramId.toUpperCase();
+  // Arm params — vertical drag
+  if (u.includes('ARM') || u.includes('HAND'))
+    return { axis: 'y', scale: -0.4 };
+  // Hair physics — horizontal
+  if (u.includes('HAIR') || u.includes('KAMIYURE'))
+    return { axis: 'x', scale: 0.3 };
+  // Fallback: bidirectional
+  return { axis: 'xy', scale: 0.2 };
+}
+
+// ===== Hit testing: which drawable is at (screenX, screenY)? =====
+function cacheDrawableData() {
+  if (!live2dModel) return;
+  const coreModel = live2dModel.internalModel.coreModel;
+  const rawModel = coreModel.getModel();
+  const count = rawModel.drawables.count;
+
+  drawableData = [];
+  for (let i = 0; i < count; i++) {
+    drawableData.push({
+      index: i,
+      id: rawModel.drawables.ids[i],
+      renderOrder: rawModel.drawables.renderOrders[i],
+      vertexCount: rawModel.drawables.vertexCounts[i],
+    });
+  }
+  // Sort by render order descending (front-most first for picking)
+  drawableData.sort((a, b) => b.renderOrder - a.renderOrder);
+}
+
+function hitTestDrawables(canvasX, canvasY) {
+  if (!live2dModel || !drawableData) return null;
+
+  const im = live2dModel.internalModel;
+  const rawModel = im.coreModel.getModel();
+
+  // Convert screen pixel coordinates → model pixel space.
+  //
+  // pixi-live2d-display's getDrawableVertices() returns coords in "model pixel space":
+  //   vertX = rawVertX * pixelsPerUnit + originalWidth / 2
+  //   vertY = -rawVertY * pixelsPerUnit + originalHeight / 2
+  // Range: (0..originalWidth) x (0..originalHeight)
+  //
+  // The PIXI container maps model pixel space → screen:
+  //   screenX = (modelPixelX - anchor.x * originalWidth) * scale.x + position.x
+  //   screenY = (modelPixelY - anchor.y * originalHeight) * scale.y + position.y
+  //
+  // Inverse (screen → model pixel space):
+  //   modelPixelX = (screenX - position.x) / scale.x + anchor.x * originalWidth
+  //   modelPixelY = (screenY - position.y) / scale.y + anchor.y * originalHeight
+
+  const resolution = pixiApp.renderer.resolution || 1;
+  const screenX = canvasX / resolution;
+  const screenY = canvasY / resolution;
+
+  const origW = im.originalWidth;
+  const origH = im.originalHeight;
+  const localX = (screenX - live2dModel.x) / live2dModel.scale.x + live2dModel.anchor.x * origW;
+  const localY = (screenY - live2dModel.y) / live2dModel.scale.y + live2dModel.anchor.y * origH;
+
+  // Collect ALL hits, not just the topmost, so we can pick the most interactive one
+  const allHits = [];
+
+  for (const d of drawableData) {
+    if (d.vertexCount < 3) continue;
+
+    // Check opacity — skip invisible drawables
+    const opacity = rawModel.drawables.opacities[d.index];
+    if (opacity < 0.01) continue;
+
+    // Get vertices in model pixel space via getDrawableVertices
+    const positions = im.getDrawableVertices(d.index);
+    const indices = rawModel.drawables.indices[d.index];
+    if (!positions || !indices || indices.length < 3) continue;
+
+    // Test each triangle
+    let isHit = false;
+    for (let t = 0; t + 2 < indices.length; t += 3) {
+      const i0 = indices[t], i1 = indices[t + 1], i2 = indices[t + 2];
+      const x0 = positions[i0 * 2], y0 = positions[i0 * 2 + 1];
+      const x1 = positions[i1 * 2], y1 = positions[i1 * 2 + 1];
+      const x2 = positions[i2 * 2], y2 = positions[i2 * 2 + 1];
+
+      if (pointInTriangle(localX, localY, x0, y0, x1, y1, x2, y2)) {
+        isHit = true;
+        break;
+      }
+    }
+    if (isHit) {
+      allHits.push(d);
+    }
+  }
+
+  if (allHits.length === 0) return null;
+
+  // Smart picking: prefer interactive parts over overlay parts.
+  //
+  // ZERO PASS: If we directly hit an arm/hand ART MESH (not a ref box),
+  // that takes priority. This handles models where the hands are positioned
+  // over the head/mouth ref area (e.g. hermes_dark hands-near-chin pose).
+  const artMeshHit = allHits.find(h =>
+    !h.id.startsWith('D_REF') &&
+    !h.id.startsWith('D_BACKGROUND') &&
+    (getPartGroup(h.id) === 'Arms' || getPartGroup(h.id) === 'Left Arm' || getPartGroup(h.id) === 'Right Arm')
+  );
+  if (artMeshHit) {
+    artMeshHit._overrideGroup = getPartGroup(artMeshHit.id);
+    return artMeshHit;
+  }
+
+  // D_REF_* meshes are intentional hit-area boxes placed by the model creator —
+  // they're perfect for identifying body regions. Prioritize them, but map
+  // them to their intended regions rather than treating as "Head" or "Other".
+  const REF_REGION_MAP = {
+    'D_REF_MOUTH': 'Mouth',
+    'D_REF_FACE':  'Face',
+    'D_REF_HEAD':  'Head',
+    'D_REF_ARM_L': 'Left Arm',
+    'D_REF_ARM_R': 'Right Arm',
+    'D_REF_BODY':  'Body',
+    'D_REF_HAIR':  'Hair',
+  };
+
+  // First pass: check if we hit any D_REF hit-area boxes.
+  // If multiple ref boxes are hit, pick the most specific one (smallest area).
+  const refHits = [];
+  for (const h of allHits) {
+    if (REF_REGION_MAP[h.id]) {
+      h._overrideGroup = REF_REGION_MAP[h.id];
+      // Compute bounding box area for specificity
+      const verts = im.getDrawableVertices(h.index);
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < verts.length; i += 2) {
+        minX = Math.min(minX, verts[i]);
+        maxX = Math.max(maxX, verts[i]);
+        minY = Math.min(minY, verts[i+1]);
+        maxY = Math.max(maxY, verts[i+1]);
+      }
+      h._area = (maxX - minX) * (maxY - minY);
+      refHits.push(h);
+    }
+  }
+  if (refHits.length > 0) {
+    // Return the smallest (most specific) ref box
+    refHits.sort((a, b) => a._area - b._area);
+    return refHits[0];
+  }
+
+  // Second pass: no ref box hit — use priority-based picking on actual art meshes.
+  // Priority: Eyes > Mouth > Brows > Face > Arms > Body > Head > Clothing > Hair > Background > Other
+  const PRIORITY = {
+    'Eyes': 10, 'Left Eye': 10, 'Right Eye': 10,
+    'Mouth': 9,
+    'Brows': 8, 'Left Brow': 8, 'Right Brow': 8,
+    'Face': 7,
+    'Arms': 6, 'Right Arm': 6, 'Left Arm': 6,
+    'Body': 5,
+    'Head': 4,
+    'Clothing': 3,
+    'Hair': 2,
+    'Background': 0,
+    'Other': 1,
+  };
+
+  // Pick the hit with the highest interaction priority.
+  // If multiple have same priority, prefer the one with higher render order (frontmost).
+  let best = allHits[0];
+  let bestPri = PRIORITY[getHitPartGroup(best)] ?? 1;
+
+  for (let i = 1; i < allHits.length; i++) {
+    const h = allHits[i];
+    const pri = PRIORITY[getHitPartGroup(h)] ?? 1;
+    if (pri > bestPri || (pri === bestPri && h.renderOrder > best.renderOrder)) {
+      best = h;
+      bestPri = pri;
+    }
+  }
+
+  return best;
+}
+
+function pointInTriangle(px, py, x0, y0, x1, y1, x2, y2) {
+  const d1 = sign(px, py, x0, y0, x1, y1);
+  const d2 = sign(px, py, x1, y1, x2, y2);
+  const d3 = sign(px, py, x2, y2, x0, y0);
+  const hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+  const hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+  return !(hasNeg && hasPos);
+}
+
+function sign(px, py, x1, y1, x2, y2) {
+  return (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
+}
+
+// ===== Setup drag interaction on the canvas =====
+function initDragInteraction() {
+  const canvas = document.getElementById('live2d-canvas');
+  const wrap = document.getElementById('canvas-wrap');
+
+  // Create tooltip element
+  dragTooltip = document.createElement('div');
+  dragTooltip.className = 'drag-tooltip';
+  dragTooltip.style.display = 'none';
+  wrap.appendChild(dragTooltip);
+
+  // Create part label element
+  partLabel = document.createElement('div');
+  partLabel.className = 'part-label';
+  partLabel.style.display = 'none';
+  wrap.appendChild(partLabel);
+
+  // Enable drag mode on canvas
+  canvas.classList.add('drag-mode');
+
+  canvas.addEventListener('mousemove', onCanvasMouseMove);
+  canvas.addEventListener('mousedown', onCanvasMouseDown);
+  canvas.addEventListener('mouseup', onCanvasMouseUp);
+  canvas.addEventListener('mouseleave', onCanvasMouseLeave);
+}
+
+function getCanvasCoords(e) {
+  const canvas = document.getElementById('live2d-canvas');
+  const rect = canvas.getBoundingClientRect();
+  const resolution = pixiApp.renderer.resolution || 1;
+  return {
+    x: (e.clientX - rect.left) * resolution,
+    y: (e.clientY - rect.top) * resolution,
+    screenX: e.clientX - rect.left,
+    screenY: e.clientY - rect.top,
+  };
+}
+
+function onCanvasMouseMove(e) {
+  if (!live2dModel || !drawableData) return;
+
+  const coords = getCanvasCoords(e);
+
+  if (dragState) {
+    // === DRAGGING: update parameters ===
+    const dx = coords.screenX - dragState.startScreenX;
+    const dy = coords.screenY - dragState.startScreenY;
+
+    // Apply Shift for fine control (10x less sensitive)
+    const fineMult = e.shiftKey ? 0.1 : 1.0;
+
+    for (const paramId of dragState.params) {
+      const info = paramDefaults[paramId];
+      if (!info) continue;
+      const sens = getParamSensitivity(paramId);
+      const range = info.max - info.min;
+
+      let delta = 0;
+      if (sens.axis === 'x')       delta = dx * sens.scale * fineMult;
+      else if (sens.axis === 'y')  delta = dy * sens.scale * fineMult;
+      else /* 'xy' */              delta = (dx + dy) * 0.5 * sens.scale * fineMult;
+
+      // Scale delta relative to parameter range and pixels
+      const paramDelta = (delta / 150) * range;
+      const newVal = Math.max(info.min, Math.min(info.max,
+        dragState.startValues[paramId] + paramDelta));
+
+      overrideValues[paramId] = newVal;
+
+      // Update slider UI
+      if (paramSliders[paramId]) {
+        paramSliders[paramId].slider.value = newVal;
+        paramSliders[paramId].valueEl.value = newVal.toFixed(2);
+        const isModified = Math.abs(newVal - info.default) > 0.01;
+        paramSliders[paramId].slider.classList.toggle('modified', isModified);
+      }
+
+      // Direct set for immediate visual feedback
+      live2dModel.internalModel.coreModel.setParameterValueById(paramId, newVal);
+    }
+
+    // Update tooltip position
+    dragTooltip.style.left = (coords.screenX + 15) + 'px';
+    dragTooltip.style.top = (coords.screenY - 25) + 'px';
+    const mainParam = dragState.params[0];
+    const val = overrideValues[mainParam];
+    dragTooltip.textContent = `${dragState.partName}: ${mainParam.replace('PARAM_', '')} = ${val != null ? val.toFixed(2) : '?'}`;
+    return;
+  }
+
+  // === HOVERING: show what part is under cursor ===
+  // Throttle hit testing to every 50ms
+  if (Date.now() - (onCanvasMouseMove._lastCheck || 0) < 50) return;
+  onCanvasMouseMove._lastCheck = Date.now();
+
+  // Refresh drawable data each hover check (vertices change with animation)
+  cacheDrawableData();
+
+  const hit = hitTestDrawables(coords.x, coords.y);
+  if (hit) {
+    const group = getHitPartGroup(hit);
+    if (group !== hoveredPart) {
+      hoveredPart = group;
+      partLabel.textContent = `${group} — click & drag to pose`;
+      partLabel.style.display = 'block';
+
+      // Show tooltip near cursor
+      dragTooltip.textContent = group;
+      dragTooltip.style.display = 'block';
+    }
+    dragTooltip.style.left = (coords.screenX + 15) + 'px';
+    dragTooltip.style.top = (coords.screenY - 25) + 'px';
+  } else {
+    hoveredPart = null;
+    partLabel.style.display = 'none';
+    dragTooltip.style.display = 'none';
+  }
+}
+
+function onCanvasMouseDown(e) {
+  if (!live2dModel || !drawableData) return;
+  if (e.button !== 0) return;  // left click only
+
+  cacheDrawableData();
+  const coords = getCanvasCoords(e);
+  const hit = hitTestDrawables(coords.x, coords.y);
+
+  if (!hit) return;
+
+  const group = getHitPartGroup(hit);
+  const params = (partParamMap && partParamMap[group]) || [];
+
+  if (params.length === 0) {
+    toast(`${group}: no controllable parameters found`, 'info');
+    return;
+  }
+
+  // Auto-pause motions when starting to drag
+  if (!motionsPaused) {
+    document.getElementById('btn-pause').click();
+  }
+
+  // Record starting state
+  const startValues = {};
+  for (const p of params) {
+    startValues[p] = overrideValues[p] != null ? overrideValues[p]
+      : (paramDefaults[p] ? paramDefaults[p].default : 0);
+  }
+
+  dragState = {
+    partName: group,
+    meshId: hit.id,
+    params: params,
+    startScreenX: coords.screenX,
+    startScreenY: coords.screenY,
+    startValues: startValues,
+  };
+
+  document.getElementById('live2d-canvas').classList.add('dragging');
+  partLabel.textContent = `Dragging: ${group} (${params.length} params)`;
+  partLabel.style.display = 'block';
+  dragTooltip.style.display = 'block';
+
+  // Prevent text selection during drag
+  e.preventDefault();
+}
+
+function onCanvasMouseUp(e) {
+  if (!dragState) return;
+
+  const canvas = document.getElementById('live2d-canvas');
+  canvas.classList.remove('dragging');
+  dragTooltip.style.display = 'none';
+
+  // Check if anything actually moved
+  let moved = false;
+  for (const p of dragState.params) {
+    if (Math.abs((overrideValues[p] || 0) - dragState.startValues[p]) > 0.02) {
+      moved = true;
+      break;
+    }
+  }
+
+  if (moved) {
+    showDragPrompt(dragState.partName);
+  } else {
+    partLabel.textContent = `${dragState.partName} — drag more to move`;
+    setTimeout(() => { if (partLabel) partLabel.style.display = 'none'; }, 1500);
+  }
+
+  dragState = null;
+}
+
+function onCanvasMouseLeave(e) {
+  if (dragState) {
+    // Finish drag even if mouse leaves canvas
+    onCanvasMouseUp(e);
+  }
+  hoveredPart = null;
+  if (partLabel) partLabel.style.display = 'none';
+  if (dragTooltip) dragTooltip.style.display = 'none';
+}
+
+function showDragPrompt(partName) {
+  // Remove any existing prompt
+  const existing = document.querySelector('.drag-prompt');
+  if (existing) existing.remove();
+
+  const wrap = document.getElementById('canvas-wrap');
+  const prompt = document.createElement('div');
+  prompt.className = 'drag-prompt';
+  prompt.innerHTML = `
+    <span>Add <b>${partName}</b> pose to animation?</span>
+    <button class="btn-stamp" id="drag-stamp">⊕ Stamp Keyframe</button>
+    <button class="btn-cancel" id="drag-cancel">Skip</button>
+  `;
+  wrap.appendChild(prompt);
+
+  document.getElementById('drag-stamp').addEventListener('click', () => {
+    // Trigger the sequencer stamp
+    document.getElementById('seq-stamp').click();
+    toast(`Keyframe stamped: ${partName} pose`, 'success');
+    prompt.remove();
+    partLabel.style.display = 'none';
+  });
+
+  document.getElementById('drag-cancel').addEventListener('click', () => {
+    prompt.remove();
+    partLabel.style.display = 'none';
+  });
+
+  // Auto-dismiss after 8 seconds
+  setTimeout(() => {
+    if (prompt.parentNode) {
+      prompt.remove();
+      if (partLabel) partLabel.style.display = 'none';
+    }
+  }, 8000);
 }
 
 // ============================================================
