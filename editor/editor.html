@@ -802,6 +802,263 @@ header h1 {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== Texture Editor ===== */
+.tex-strip {
+  width: 120px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.tex-strip-header {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--accent-bright);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tex-strip-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tex-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  background: #000;
+  transition: border-color 0.15s;
+}
+.tex-thumb:hover { border-color: var(--accent-bright); }
+.tex-thumb.active { border-color: var(--accent-bright); box-shadow: 0 0 8px var(--accent-glow); }
+.tex-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.tex-thumb-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.7);
+  color: var(--text-dim);
+  font-size: 9px;
+  text-align: center;
+  padding: 2px 0;
+}
+.tex-strip-actions {
+  padding: 6px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tex-strip-actions .canvas-btn { width: 100%; }
+
+.tex-preview-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #050810;
+}
+.tex-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.tex-preview-info { color: var(--text-dim); }
+.tex-canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px;
+}
+#tex-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+  cursor: crosshair;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.tex-crosshair {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--accent-bright);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+.tex-pixel-info {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tex-sidebar {
+  width: 260px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.tex-sidebar::-webkit-scrollbar { width: 6px; }
+.tex-sidebar::-webkit-scrollbar-track { background: transparent; }
+.tex-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.tex-sidebar-section {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.tex-sidebar-section h4 {
+  font-size: 12px;
+  color: var(--accent-bright);
+  margin-bottom: 8px;
+}
+
+.tex-picked-color {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tex-color-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.tex-color-values {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.tex-slider-group {
+  margin-bottom: 8px;
+}
+.tex-slider-group label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 3px;
+}
+.tex-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--surface2);
+  border-radius: 3px;
+  outline: none;
+}
+.tex-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+.tex-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+
+.tex-presets { display: flex; flex-direction: column; gap: 8px; }
+.tex-preset-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.tex-preset-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  width: 100%;
+  margin-bottom: 2px;
+}
+.tex-preset {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.1s;
+}
+.tex-preset:hover { transform: scale(1.15); border-color: var(--text); }
+
+.tex-histogram {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.tex-hist-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.1s;
+}
+.tex-hist-swatch:hover { transform: scale(1.15); border-color: var(--text); }
+.tex-hist-swatch .tooltip {
+  display: none;
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  font-size: 10px;
+  color: var(--text);
+  white-space: nowrap;
+  border-radius: 4px;
+  z-index: 10;
+}
+.tex-hist-swatch:hover .tooltip { display: block; }
+
+.tex-sidebar-actions {
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+.tex-sidebar-actions .btn { flex: 1; }
+.tex-sidebar-actions .canvas-btn { flex-shrink: 0; }
+
+/* Preview mode highlighting */
+.tex-pixel-info .picked { color: var(--accent-bright); font-weight: bold; }
 </style>
 </head>
 <body>
@@ -821,12 +1078,12 @@ header h1 {
 <!-- ===== Tabs ===== -->
 <div class="tabs">
   <button class="tab active" data-tab="pose">&#x25B6; Pose Studio</button>
-  <button class="tab disabled" data-tab="texture">&#x1F3A8; Texture (Phase 2)</button>
+  <button class="tab" data-tab="texture">&#x1F3A8; Texture Editor</button>
   <button class="tab disabled" data-tab="bg">&#x1F5BC; Background (Phase 3)</button>
 </div>
 
-<!-- ===== Main ===== -->
-<div class="main">
+<!-- ===== Main (Pose Studio) ===== -->
+<div class="main" id="pose-panel">
 
   <!-- Canvas -->
   <div class="canvas-wrap" id="canvas-wrap">
@@ -890,7 +1147,122 @@ header h1 {
   </div>
 </div>
 
-<!-- 
+<!-- ===== Texture Editor Panel ===== -->
+<div class="main" id="texture-panel" style="display:none;">
+  <!-- Texture thumbnails strip -->
+  <div class="tex-strip">
+    <div class="tex-strip-header">Texture Sheets</div>
+    <div class="tex-strip-list" id="tex-strip-list">
+      <div class="tex-thumb-placeholder" style="color:var(--text-dim); font-size:12px; padding:20px 10px;">Load a model first</div>
+    </div>
+    <div class="tex-strip-actions">
+      <button class="canvas-btn" id="tex-btn-reset" title="Reset current texture to last backup">&#x21A9; Reset</button>
+    </div>
+  </div>
+
+  <!-- Preview canvas -->
+  <div class="tex-preview-wrap">
+    <div class="tex-preview-header">
+      <span id="tex-preview-label">Select a texture above</span>
+      <span class="tex-preview-info" id="tex-preview-info"></span>
+    </div>
+    <div class="tex-canvas-container" id="tex-canvas-container">
+      <canvas id="tex-canvas"></canvas>
+      <div class="tex-crosshair" id="tex-crosshair" style="display:none;"></div>
+    </div>
+    <div class="tex-pixel-info" id="tex-pixel-info">Click texture to pick a color</div>
+  </div>
+
+  <!-- Color controls sidebar -->
+  <div class="tex-sidebar">
+    <div class="tex-sidebar-section">
+      <h4>&#x1F3A8; Picked Color</h4>
+      <div class="tex-picked-color">
+        <div class="tex-color-swatch" id="tex-color-swatch" style="background:#808080;"></div>
+        <div class="tex-color-values" id="tex-color-values">
+          <div>RGB: <span id="tex-rgb">128, 128, 128</span></div>
+          <div>HSV: <span id="tex-hsv">0, 0%, 50%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tex-sidebar-section">
+      <h4>&#x1F308; Color Shift</h4>
+      <div class="tex-slider-group">
+        <label>Hue Shift <span id="tex-hue-val">0</span>&deg;</label>
+        <input type="range" class="tex-slider" id="tex-hue" min="-180" max="180" value="0" step="1">
+      </div>
+      <div class="tex-slider-group">
+        <label>Saturation <span id="tex-sat-val">1.0</span>x</label>
+        <input type="range" class="tex-slider" id="tex-sat" min="0" max="3" value="1" step="0.05">
+      </div>
+      <div class="tex-slider-group">
+        <label>Brightness <span id="tex-val-val">1.0</span>x</label>
+        <input type="range" class="tex-slider" id="tex-bright" min="0" max="3" value="1" step="0.05">
+      </div>
+      <div class="tex-slider-group">
+        <label>Tolerance <span id="tex-tol-val">30</span></label>
+        <input type="range" class="tex-slider" id="tex-tolerance" min="1" max="80" value="30" step="1">
+      </div>
+    </div>
+
+    <div class="tex-sidebar-section">
+      <h4>&#x2B50; Quick Presets</h4>
+      <div class="tex-presets" id="tex-presets">
+        <!-- Hair presets -->
+        <div class="tex-preset-group">
+          <span class="tex-preset-label">Hair</span>
+          <button class="tex-preset" data-hue="0" data-sat="0" data-val="0.3" title="Black" style="background:#1a1a2e;"></button>
+          <button class="tex-preset" data-hue="0" data-sat="0.3" data-val="0.4" title="Dark Blue" style="background:#1a2744;"></button>
+          <button class="tex-preset" data-hue="30" data-sat="0.8" data-val="0.7" title="Brown" style="background:#8B4513;"></button>
+          <button class="tex-preset" data-hue="0" data-sat="0.9" data-val="0.7" title="Red" style="background:#CC3333;"></button>
+          <button class="tex-preset" data-hue="340" data-sat="0.5" data-val="0.8" title="Pink" style="background:#E8769A;"></button>
+          <button class="tex-preset" data-hue="45" data-sat="0.7" data-val="0.8" title="Blonde" style="background:#D4A54A;"></button>
+          <button class="tex-preset" data-hue="180" data-sat="0.5" data-val="0.6" title="Teal" style="background:#4D9999;"></button>
+          <button class="tex-preset" data-hue="270" data-sat="0.5" data-val="0.6" title="Purple" style="background:#8855AA;"></button>
+          <button class="tex-preset" data-hue="120" data-sat="0.5" data-val="0.5" title="Green" style="background:#44AA44;"></button>
+          <button class="tex-preset" data-hue="25" data-sat="0.9" data-val="0.8" title="Orange" style="background:#DD7722;"></button>
+          <button class="tex-preset" data-hue="200" data-sat="0.8" data-val="0.9" title="Cyan" style="background:#33BBEE;"></button>
+          <button class="tex-preset" data-hue="0" data-sat="0" data-val="1" title="White" style="background:#EEEEEE;"></button>
+        </div>
+        <!-- Shirt presets -->
+        <div class="tex-preset-group">
+          <span class="tex-preset-label">Shirt</span>
+          <button class="tex-preset" data-hue="0" data-sat="0" data-val="0.4" title="Dark" style="background:#555;"></button>
+          <button class="tex-preset" data-hue="210" data-sat="0.7" data-val="0.6" title="Navy" style="background:#2B4C7E;"></button>
+          <button class="tex-preset" data-hue="0" data-sat="0.8" data-val="0.7" title="Red" style="background:#BB3333;"></button>
+          <button class="tex-preset" data-hue="140" data-sat="0.5" data-val="0.5" title="Forest" style="background:#3B7A3B;"></button>
+          <button class="tex-preset" data-hue="270" data-sat="0.4" data-val="0.5" title="Plum" style="background:#6B3A6B;"></button>
+          <button class="tex-preset" data-hue="35" data-sat="0.3" data-val="0.7" title="Cream" style="background:#C4A882;"></button>
+        </div>
+        <!-- Bow presets -->
+        <div class="tex-preset-group">
+          <span class="tex-preset-label">Bow</span>
+          <button class="tex-preset" data-hue="0" data-sat="0.8" data-val="0.6" title="Red" style="background:#992222;"></button>
+          <button class="tex-preset" data-hue="210" data-sat="0.7" data-val="0.6" title="Blue" style="background:#2B4C7E;"></button>
+          <button class="tex-preset" data-hue="270" data-sat="0.5" data-val="0.5" title="Purple" style="background:#6B3A8B;"></button>
+          <button class="tex-preset" data-hue="0" data-sat="0" data-val="0.8" title="White" style="background:#CCC;"></button>
+          <button class="tex-preset" data-hue="45" data-sat="0.8" data-val="0.8" title="Gold" style="background:#CCAA22;"></button>
+          <button class="tex-preset" data-hue="330" data-sat="0.6" data-val="0.7" title="Pink" style="background:#CC6688;"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tex-sidebar-section">
+      <h4>&#x1F4CA; Dominant Colors</h4>
+      <div class="tex-histogram" id="tex-histogram">
+        <div style="color:var(--text-dim); font-size:11px;">Select a texture</div>
+      </div>
+    </div>
+
+    <div class="tex-sidebar-actions">
+      <button class="btn btn-primary" id="tex-btn-apply" disabled>&#x2714; Apply Recolor</button>
+      <button class="canvas-btn" id="tex-btn-undo" disabled>&#x21A9; Undo</button>
+    </div>
+  </div>
+</div>
+
+<!--
   Load order matters:
   1. Live2D Cubism Core (provides Live2DCubismCore global)
   2. PIXI.js v7 (provides PIXI global)
@@ -2900,6 +3272,402 @@ window.addEventListener('resize', () => {
   live2dModel.x = w / 2;
   live2dModel.y = h * 0.55;
 });
+
+// ============================================================
+//  Texture Editor
+// ============================================================
+
+var texState = {
+  model: null,         // current model name
+  textures: [],        // texture paths from model info
+  activeIndex: -1,     // currently selected texture index
+  originalPixels: null, // Uint8ClampedArray of original image data
+  pickedColor: null,   // {r, g, b} from click
+  canvas: null,
+  ctx: null,
+};
+
+// --- Tab switching ---
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.tab;
+    if (tab.classList.contains('disabled')) return;
+
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    const posePanel = document.getElementById('pose-panel');
+    const texPanel = document.getElementById('texture-panel');
+
+    if (target === 'texture') {
+      posePanel.style.display = 'none';
+      texPanel.style.display = 'flex';
+      // Load textures if model already loaded
+      if (currentModel && texState.model !== currentModel) {
+        loadTextureStrip();
+      }
+    } else if (target === 'pose') {
+      texPanel.style.display = 'none';
+      posePanel.style.display = 'flex';
+    }
+  });
+});
+
+// Patch loadModel to also load texture strip
+const _origLoadModel = loadModel;
+loadModel = async function(name) {
+  await _origLoadModel(name);
+  // Always load texture data for the texture editor
+  texState.model = name;
+  if (document.getElementById('texture-panel').style.display !== 'none') {
+    loadTextureStrip();
+  }
+};
+
+async function loadTextureStrip() {
+  if (!modelInfo || !modelInfo.textures) return;
+  texState.model = currentModel;
+  texState.textures = modelInfo.textures;
+
+  const stripList = document.getElementById('tex-strip-list');
+  stripList.innerHTML = '';
+
+  const labels = ['Face + Hair', 'Body + Clothes', 'Hair Bulk', 'Props', 'Legs'];
+
+  for (let i = 0; i < texState.textures.length; i++) {
+    const texPath = texState.textures[i];
+    const thumb = document.createElement('div');
+    thumb.className = 'tex-thumb';
+    thumb.dataset.index = i;
+
+    const img = document.createElement('img');
+    img.src = `/live2d-models/${currentModel}/runtime/${texPath}`;
+    img.alt = `Texture ${i}`;
+
+    const label = document.createElement('div');
+    label.className = 'tex-thumb-label';
+    label.textContent = labels[i] || `Tex ${i}`;
+
+    thumb.appendChild(img);
+    thumb.appendChild(label);
+    stripList.appendChild(thumb);
+
+    thumb.addEventListener('click', () => selectTexture(i));
+  }
+
+  // Auto-select first texture
+  if (texState.textures.length > 0) {
+    selectTexture(0);
+  }
+}
+
+async function selectTexture(index) {
+  texState.activeIndex = index;
+
+  // Update active thumb
+  document.querySelectorAll('.tex-thumb').forEach(t => t.classList.remove('active'));
+  const thumb = document.querySelector(`.tex-thumb[data-index="${index}"]`);
+  if (thumb) thumb.classList.add('active');
+
+  // Load texture into canvas
+  const canvas = document.getElementById('tex-canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  texState.canvas = canvas;
+  texState.ctx = ctx;
+
+  const labels = ['Face + Hair', 'Body + Clothes', 'Hair Bulk', 'Props', 'Legs'];
+  document.getElementById('tex-preview-label').textContent = labels[index] || `Texture ${index}`;
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    texState.originalPixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data.slice();
+    document.getElementById('tex-preview-info').textContent = `${img.width} x ${img.height}`;
+
+    // Reset sliders
+    document.getElementById('tex-hue').value = 0;
+    document.getElementById('tex-sat').value = 1;
+    document.getElementById('tex-bright').value = 1;
+    document.getElementById('tex-tolerance').value = 30;
+    updateSliderLabels();
+    texState.pickedColor = null;
+    document.getElementById('tex-btn-apply').disabled = true;
+  };
+  img.src = `/live2d-models/${currentModel}/runtime/${texState.textures[index]}`;
+
+  // Load histogram
+  loadHistogram(index);
+}
+
+// --- Canvas click to pick color ---
+document.getElementById('tex-canvas').addEventListener('click', (e) => {
+  const canvas = texState.canvas;
+  if (!canvas || !texState.originalPixels) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = Math.floor((e.clientX - rect.left) * scaleX);
+  const y = Math.floor((e.clientY - rect.top) * scaleY);
+
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+
+  const idx = (y * canvas.width + x) * 4;
+  const r = texState.originalPixels[idx];
+  const g = texState.originalPixels[idx + 1];
+  const b = texState.originalPixels[idx + 2];
+  const a = texState.originalPixels[idx + 3];
+
+  texState.pickedColor = { r, g, b };
+
+  // Update UI
+  document.getElementById('tex-color-swatch').style.background = `rgb(${r},${g},${b})`;
+  document.getElementById('tex-rgb').textContent = `${r}, ${g}, ${b}`;
+
+  // HSV
+  const h = rgbToHue(r, g, b);
+  const s = rgbToSat(r, g, b);
+  const v = rgbToVal(r, g, b);
+  document.getElementById('tex-hsv').textContent = `${Math.round(h)}°, ${Math.round(s*100)}%, ${Math.round(v*100)}%`;
+
+  // Pixel info
+  document.getElementById('tex-pixel-info').innerHTML =
+    `<span class="picked">RGB(${r}, ${g}, ${b})</span> at (${x}, ${y})  —  Alpha: ${a}`;
+
+  // Crosshair on canvas
+  const crosshair = document.getElementById('tex-crosshair');
+  const container = document.getElementById('tex-canvas-container');
+  crosshair.style.display = 'block';
+  crosshair.style.left = (e.clientX - container.getBoundingClientRect().left) + 'px';
+  crosshair.style.top = (e.clientY - container.getBoundingClientRect().top) + 'px';
+
+  // Enable apply button
+  document.getElementById('tex-btn-apply').disabled = false;
+
+  // Trigger preview
+  previewRecolor();
+});
+
+// --- Slider live preview ---
+['tex-hue', 'tex-sat', 'tex-bright', 'tex-tolerance'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    updateSliderLabels();
+    if (texState.pickedColor) previewRecolor();
+  });
+});
+
+function updateSliderLabels() {
+  document.getElementById('tex-hue-val').textContent = document.getElementById('tex-hue').value;
+  document.getElementById('tex-sat-val').textContent = parseFloat(document.getElementById('tex-sat').value).toFixed(2);
+  document.getElementById('tex-val-val').textContent = parseFloat(document.getElementById('tex-bright').value).toFixed(2);
+  document.getElementById('tex-tol-val').textContent = document.getElementById('tex-tolerance').value;
+}
+
+function previewRecolor() {
+  if (!texState.pickedColor || !texState.originalPixels) return;
+  const canvas = texState.canvas;
+  const ctx = texState.ctx;
+  const { r: tR, g: tG, b: tB } = texState.pickedColor;
+
+  const hueShift = parseFloat(document.getElementById('tex-hue').value);
+  const satMult = parseFloat(document.getElementById('tex-sat').value);
+  const valMult = parseFloat(document.getElementById('tex-bright').value);
+  const tolerance = parseFloat(document.getElementById('tex-tolerance').value);
+
+  // Target HSV
+  const [tH, tS, tV] = rgbToHsvArr(tR, tG, tB);
+
+  // Rebuild image from original
+  const imgData = new ImageData(new Uint8ClampedArray(texState.originalPixels), canvas.width, canvas.height);
+  const d = imgData.data;
+
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 10) continue; // transparent
+
+    const [h, s, v] = rgbToHsvArr(d[i], d[i+1], d[i+2]);
+
+    // Hue distance (wrap-around)
+    let hDist = Math.abs(h - tH);
+    if (hDist > 180) hDist = 360 - hDist;
+    hDist /= 180;
+
+    const sDist = Math.abs(s - tS);
+    const vDist = Math.abs(v - tV);
+
+    const dist = Math.sqrt(hDist*hDist*2 + sDist*sDist + vDist*vDist);
+
+    if (dist < tolerance / 100) {
+      // Apply shift
+      const newH = ((h + hueShift) % 360 + 360) % 360;
+      const newS = Math.min(s * satMult, 1);
+      const newV = Math.min(v * valMult, 1);
+      const [nr, ng, nb] = hsvToRgbArr(newH, newS, newV);
+      d[i] = nr;
+      d[i+1] = ng;
+      d[i+2] = nb;
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// --- Apply recolor to server ---
+document.getElementById('tex-btn-apply').addEventListener('click', async () => {
+  if (!texState.pickedColor || texState.activeIndex < 0) return;
+  const { r, g, b } = texState.pickedColor;
+
+  const body = {
+    target_r: r, target_g: g, target_b: b,
+    tolerance: parseFloat(document.getElementById('tex-tolerance').value),
+    hue_shift: parseFloat(document.getElementById('tex-hue').value),
+    sat_mult: parseFloat(document.getElementById('tex-sat').value),
+    val_mult: parseFloat(document.getElementById('tex-bright').value),
+  };
+
+  try {
+    const resp = await fetch(
+      `${API}/api/model/${currentModel}/texture/${texState.activeIndex}/recolor`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    );
+    const data = await resp.json();
+    if (data.status === 'recolor_applied') {
+      toast(`Recolor applied — ${data.pixels_changed.toLocaleString()} pixels changed`, 'success');
+      document.getElementById('tex-btn-undo').disabled = false;
+      // Reload to show final result from server
+      selectTexture(texState.activeIndex);
+    } else if (data.status === 'no_match') {
+      toast(data.message, 'warn');
+    } else {
+      toast(`Error: ${data.detail || 'Unknown error'}`, 'error');
+    }
+  } catch (err) {
+    toast(`Network error: ${err.message}`, 'error');
+  }
+});
+
+// --- Undo (reset to backup) ---
+document.getElementById('tex-btn-reset').addEventListener('click', async () => {
+  if (texState.activeIndex < 0) return;
+  try {
+    const resp = await fetch(
+      `${API}/api/model/${currentModel}/texture/${texState.activeIndex}/reset`,
+      { method: 'POST' }
+    );
+    const data = await resp.json();
+    if (data.status === 'reset') {
+      toast(`Reset texture ${texState.activeIndex} from ${data.restored_from}`, 'success');
+      selectTexture(texState.activeIndex);
+    }
+  } catch (err) {
+    toast(`Reset failed: ${err.message}`, 'error');
+  }
+});
+
+document.getElementById('tex-btn-undo').addEventListener('click', async () => {
+  // Same as reset — undo = restore last backup
+  document.getElementById('tex-btn-reset').click();
+});
+
+// --- Histogram (dominant colors) ---
+async function loadHistogram(index) {
+  const container = document.getElementById('tex-histogram');
+  container.innerHTML = '<div style="color:var(--text-dim); font-size:11px;">Loading...</div>';
+
+  try {
+    const resp = await fetch(`${API}/api/model/${currentModel}/texture/${index}/histogram`);
+    const data = await resp.json();
+    container.innerHTML = '';
+
+    for (const c of data.colors) {
+      const swatch = document.createElement('div');
+      swatch.className = 'tex-hist-swatch';
+      swatch.style.background = `rgb(${c.r},${c.g},${c.b})`;
+
+      const tooltip = document.createElement('div');
+      tooltip.className = 'tooltip';
+      tooltip.textContent = `RGB(${c.r},${c.g},${c.b}) — ${c.percent}%`;
+      swatch.appendChild(tooltip);
+
+      swatch.addEventListener('click', () => {
+        texState.pickedColor = { r: c.r, g: c.g, b: c.b };
+        document.getElementById('tex-color-swatch').style.background = `rgb(${c.r},${c.g},${c.b})`;
+        document.getElementById('tex-rgb').textContent = `${c.r}, ${c.g}, ${c.b}`;
+        const h = rgbToHue(c.r, c.g, c.b);
+        const s = rgbToSat(c.r, c.g, c.b);
+        const v = rgbToVal(c.r, c.g, c.b);
+        document.getElementById('tex-hsv').textContent = `${Math.round(h)}°, ${Math.round(s*100)}%, ${Math.round(v*100)}%`;
+        document.getElementById('tex-btn-apply').disabled = false;
+        previewRecolor();
+      });
+
+      container.appendChild(swatch);
+    }
+  } catch (err) {
+    container.innerHTML = `<div style="color:var(--danger); font-size:11px;">Failed: ${err.message}</div>`;
+  }
+}
+
+// --- Preset buttons ---
+document.querySelectorAll('.tex-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!texState.pickedColor) {
+      toast('Click on the texture to pick a color first', 'warn');
+      return;
+    }
+    const hue = parseFloat(btn.dataset.hue);
+    const sat = parseFloat(btn.dataset.sat);
+    const val = parseFloat(btn.dataset.val);
+
+    // Calculate what hue shift to apply
+    const { r, g, b } = texState.pickedColor;
+    const [origH, origS, origV] = rgbToHsvArr(r, g, b);
+    const hueShift = hue - origH;
+    const satMult = origS > 0.01 ? sat / origS : sat;
+    const valMult = origV > 0.01 ? val / origV : val;
+
+    document.getElementById('tex-hue').value = Math.round(hueShift);
+    document.getElementById('tex-sat').value = satMult.toFixed(2);
+    document.getElementById('tex-bright').value = valMult.toFixed(2);
+    updateSliderLabels();
+    previewRecolor();
+  });
+});
+
+// --- HSV utility functions ---
+function rgbToHue(r, g, b) { return rgbToHsvArr(r, g, b)[0]; }
+function rgbToSat(r, g, b) { return rgbToHsvArr(r, g, b)[1]; }
+function rgbToVal(r, g, b) { return rgbToHsvArr(r, g, b)[2]; }
+
+function rgbToHsvArr(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0, s = max === 0 ? 0 : d / max, v = max;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return [h * 360, s, v];
+}
+
+function hsvToRgbArr(h, s, v) {
+  h = ((h % 360) + 360) % 360;
+  const c = v * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = v - c;
+  let r, g, b;
+  if (h < 60) { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
 </script>
 </body>
 </html>

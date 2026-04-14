@@ -300,6 +300,209 @@ async def upload_texture(name: str, index: int, file: UploadFile = File(...)):
     return {"status": "saved", "path": textures[index]}
 
 
+def _get_texture_path(name: str, index: int) -> Path:
+    """Resolve texture file path from model name and texture index."""
+    from PIL import Image  # ensure available
+
+    model_dir = MODELS_DIR / name / "runtime"
+    if not model_dir.exists():
+        model_dir = MODELS_DIR / name
+    model3_files = list(model_dir.glob("*.model3.json"))
+    if not model3_files:
+        raise HTTPException(404, f"No model3.json found for '{name}'")
+
+    with open(model3_files[0]) as f:
+        model3 = json.load(f)
+
+    textures = model3.get("FileReferences", {}).get("Textures", [])
+    if index < 0 or index >= len(textures):
+        raise HTTPException(400, f"Texture index {index} out of range (have {len(textures)})")
+
+    return model_dir / textures[index]
+
+
+def _rgb_to_hsv(r, g, b):
+    """Convert RGB (0-255) to HSV (H: 0-360, S: 0-1, V: 0-1)."""
+    import colorsys
+    return colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+
+
+def _hsv_to_rgb(h, s, v):
+    """Convert HSV (H: 0-360, S: 0-1, V: 0-1) to RGB (0-255)."""
+    import colorsys
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
+@app.post("/api/model/{name}/texture/{index}/recolor")
+async def recolor_texture(name: str, index: int, body: dict):
+    """
+    Recolor pixels in a texture that match a target color.
+
+    Body params:
+      target_r/g/b: The color to match (0-255)
+      tolerance: How close a pixel must be to the target (0-100, default 30)
+      hue_shift: Shift hue by this many degrees (-180 to 180, default 0)
+      sat_mult: Multiply saturation by this factor (0-3, default 1.0)
+      val_mult: Multiply brightness by this factor (0-3, default 1.0)
+    """
+    from PIL import Image
+    import numpy as np
+
+    texture_path = _get_texture_path(name, index)
+
+    target_r = int(body.get("target_r", 128))
+    target_g = int(body.get("target_g", 128))
+    target_b = int(body.get("target_b", 128))
+    tolerance = float(body.get("tolerance", 30))
+    hue_shift = float(body.get("hue_shift", 0))
+    sat_mult = float(body.get("sat_mult", 1.0))
+    val_mult = float(body.get("val_mult", 1.0))
+
+    # Convert target to HSV for comparison
+    t_h, t_s, t_v = _rgb_to_hsv(target_r, target_g, target_b)
+
+    # Load image
+    img = Image.open(texture_path).convert("RGBA")
+    data = np.array(img, dtype=np.float64)
+
+    r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+
+    # Convert all pixels to HSV
+    rn, gn, bn = r / 255.0, g / 255.0, b / 255.0
+    # Manual HSV conversion for numpy arrays
+    maxc = np.maximum(np.maximum(rn, gn), bn)
+    minc = np.minimum(np.minimum(rn, gn), bn)
+    v_arr = maxc
+    deltac = maxc - minc
+
+    s_arr = np.where(maxc != 0, deltac / maxc, 0)
+
+    # Hue calculation
+    rc = np.where(deltac != 0, (maxc - rn) / (6 * deltac + 1e-10), 0)
+    gc = np.where(deltac != 0, (maxc - gn) / (6 * deltac + 1e-10), 0)
+    bc = np.where(deltac != 0, (maxc - bn) / (6 * deltac + 1e-10), 0)
+
+    h_arr = np.where(rn == maxc, bc - gc,
+            np.where(gn == maxc, 1/3 + rc - bc,
+                     2/3 + gc - rc))
+    h_arr = (h_arr % 1.0) * 360  # degrees
+
+    # Mask: pixels within tolerance of target color
+    # Use distance in HSV space (weighted)
+    h_dist = np.minimum(np.abs(h_arr - t_h), 360 - np.abs(h_arr - t_h)) / 180.0
+    s_dist = np.abs(s_arr - t_s)
+    v_dist = np.abs(v_arr - t_v)
+
+    # Weighted distance — hue matters most for color, value matters for brightness
+    color_dist = np.sqrt(h_dist * h_dist * 2.0 + s_dist * s_dist + v_dist * v_dist)
+    mask = color_dist < (tolerance / 100.0)
+
+    # Only apply to non-transparent pixels
+    mask = mask & (a > 10)
+
+    if np.sum(mask) == 0:
+        return {"status": "no_match", "pixels_changed": 0,
+                "message": f"No pixels matched target RGB({target_r},{target_g},{target_b}) within tolerance {tolerance}"}
+
+    # Apply color shift to matching pixels
+    h_new = (h_arr + hue_shift) % 360
+    s_new = np.clip(s_arr * sat_mult, 0, 1)
+    v_new = np.clip(v_arr * val_mult, 0, 1)
+
+    # Convert back to RGB
+    h_norm = h_new / 360.0
+    # HSV to RGB
+    i = (h_norm * 6.0).astype(int)
+    f_arr = h_norm * 6.0 - i
+    p = v_new * (1 - s_new)
+    q = v_new * (1 - s_new * f_arr)
+    t = v_new * (1 - s_new * (1 - f_arr))
+
+    i_mod = i % 6
+    conditions = [
+        i_mod == 0, i_mod == 1, i_mod == 2,
+        i_mod == 3, i_mod == 4, i_mod == 5
+    ]
+    r_new = np.select(conditions, [v_new, q, p, p, t, v_new])
+    g_new = np.select(conditions, [t, v_new, v_new, q, p, p])
+    b_new = np.select(conditions, [p, p, t, v_new, v_new, q])
+
+    # Apply only to masked pixels
+    data[:, :, 0] = np.where(mask, np.clip(r_new * 255, 0, 255), data[:, :, 0])
+    data[:, :, 1] = np.where(mask, np.clip(g_new * 255, 0, 255), data[:, :, 1])
+    data[:, :, 2] = np.where(mask, np.clip(b_new * 255, 0, 255), data[:, :, 2])
+
+    pixels_changed = int(np.sum(mask))
+
+    # Save with backup
+    backup_name = f"{texture_path.stem}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}{texture_path.suffix}"
+    shutil.copy2(texture_path, texture_path.parent / backup_name)
+
+    result_img = Image.fromarray(data.astype(np.uint8), "RGBA")
+    result_img.save(str(texture_path), "PNG")
+
+    return {
+        "status": "recolor_applied",
+        "pixels_changed": pixels_changed,
+        "total_pixels": int(mask.size),
+        "path": str(texture_path),
+    }
+
+
+@app.post("/api/model/{name}/texture/{index}/reset")
+async def reset_texture(name: str, index: int):
+    """Reset a texture to its most recent backup."""
+    texture_path = _get_texture_path(name, index)
+    tex_dir = texture_path.parent
+    stem = texture_path.stem
+
+    # Find most recent backup
+    backups = sorted(tex_dir.glob(f"{stem}.backup_*.png"), reverse=True)
+    if not backups:
+        raise HTTPException(404, f"No backups found for texture {index}")
+
+    shutil.copy2(backups[0], texture_path)
+    return {"status": "reset", "restored_from": backups[0].name}
+
+
+@app.get("/api/model/{name}/texture/{index}/histogram")
+async def texture_histogram(name: str, index: int):
+    """Get dominant colors in a texture for smart color picking."""
+    from PIL import Image
+    import numpy as np
+
+    texture_path = _get_texture_path(name, index)
+    img = Image.open(texture_path).convert("RGBA")
+    data = np.array(img)
+
+    # Only consider non-transparent pixels
+    mask = data[:, :, 3] > 50
+    pixels = data[mask][:, :3]  # RGB only
+
+    if len(pixels) == 0:
+        return {"colors": []}
+
+    # Quantize to reduce colors (round to nearest 16)
+    quantized = (pixels // 16) * 16
+
+    # Count unique colors
+    unique, counts = np.unique(quantized, axis=0, return_counts=True)
+
+    # Sort by frequency, return top 12
+    top_idx = np.argsort(counts)[::-1][:12]
+    colors = []
+    for i in top_idx:
+        r, g, b = unique[i]
+        colors.append({
+            "r": int(r), "g": int(g), "b": int(b),
+            "count": int(counts[i]),
+            "percent": round(float(counts[i]) / len(pixels) * 100, 1),
+        })
+
+    return {"colors": colors}
+
+
 if __name__ == "__main__":
     print("\n  Live2D Model Editor")
     print(f"  http://localhost:8080\n")
