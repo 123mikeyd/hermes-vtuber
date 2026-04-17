@@ -1,4 +1,5 @@
 from typing import Type, Literal
+from pathlib import Path
 from loguru import logger
 
 from .agents.agent_interface import AgentInterface
@@ -7,6 +8,10 @@ from .stateless_llm_factory import LLMFactory as StatelessLLMFactory
 from .agents.hume_ai import HumeAIAgent
 from .agents.letta_agent import LettaAgent
 from .agents.hermes_agent import HermesAgent
+
+# Phase 2a — persona memory layer. Imported lazily per-call so import
+# failures don't kill the factory for other agent types.
+from ..persona import Identity, SessionMemory, PersonaComposer, load_identity
 
 from ..mcpp.tool_manager import ToolManager
 from ..mcpp.tool_executor import ToolExecutor
@@ -131,6 +136,59 @@ class AgentFactory:
 
         elif conversation_agent_choice == "hermes_agent":
             settings = agent_settings.get("hermes_agent", {})
+
+            # Phase 2a — persona memory layer (optional).
+            # Attempt to load an Identity from either a path or an inline
+            # dict. If neither is configured, we pass None and HermesAgent
+            # falls back to the classic `system` string path.
+            identity: Optional[Identity] = None
+            session_memory: Optional[SessionMemory] = None
+            composer: Optional[PersonaComposer] = None
+
+            identity_path = settings.get("persona_v2_identity_path")
+            identity_inline = settings.get("persona_v2_identity")
+            try:
+                if identity_path:
+                    identity = load_identity(identity_path)
+                    logger.info(
+                        f"Persona v2 enabled from path: {identity_path} "
+                        f"({identity.name!r}, ~{identity.token_estimate()} est. tokens)"
+                    )
+                elif identity_inline:
+                    identity = load_identity(identity_inline)
+                    logger.info(
+                        f"Persona v2 enabled from inline dict: "
+                        f"{identity.name!r} (~{identity.token_estimate()} est. tokens)"
+                    )
+            except Exception as e:
+                # Don't fail the whole factory if persona config is bad —
+                # log loudly, keep going with the classic system path.
+                logger.error(
+                    f"Persona v2 identity failed to load ({e}). "
+                    f"Falling back to classic system prompt path."
+                )
+                identity = None
+
+            if identity is not None:
+                # Resolve persistence path for session memory. Relative
+                # paths land under chat_history/ (OLLV's convention).
+                mem_path_raw = settings.get("persona_v2_memory_path")
+                if mem_path_raw:
+                    mem_path = Path(mem_path_raw).expanduser()
+                    if not mem_path.is_absolute():
+                        mem_path = Path("chat_history") / mem_path
+                else:
+                    safe_name = "".join(
+                        c if c.isalnum() or c in "-_" else "_"
+                        for c in identity.name.lower()
+                    )
+                    mem_path = Path("chat_history") / "persona_sessions" / f"{safe_name}.json"
+
+                session_memory = SessionMemory.load(mem_path)
+                composer = PersonaComposer(
+                    total_budget_tokens=settings.get("persona_v2_budget_tokens", 2500),
+                )
+
             return HermesAgent(
                 hermes_path=settings.get("hermes_path", "hermes"),
                 system=system_prompt,
@@ -140,6 +198,10 @@ class AgentFactory:
                 segment_method=settings.get("segment_method", "pysbd"),
                 model=settings.get("model", ""),
                 timeout=settings.get("timeout", 120),
+                # Phase 2a — these are all None if persona v2 is not configured
+                identity=identity,
+                session_memory=session_memory,
+                composer=composer,
             )
 
         else:
