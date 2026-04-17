@@ -24,8 +24,8 @@ Tuning:
    feel worse than low recall. We'd rather miss a subtle mood shift than
    invent one that isn't there.
  - Each hit contributes +/- 0.1 on the relevant axis, clamped to [-1, 1].
- - Exclamation marks and question marks nudge arousal.
- - ALL CAPS words (len >= 3) nudge arousal up.
+ - Exclamation marks and question marks nudge energy.
+ - ALL CAPS words (len >= 3) nudge energy up.
  - Expression-keyword tags like [happy], [angry] — if the LLM emitted
    them — count as explicit mood signals (strongest contribution).
 
@@ -114,17 +114,17 @@ FOCUS_LOW = {
 # These contribute strong deltas because they're EXPLICIT signals, not
 # keyword guesses.
 EXPRESSION_TAGS: Dict[str, MoodDelta] = {
-    "happy":     MoodDelta(valence=+0.5, arousal=+0.2, social=+0.2, reason="[happy] tag"),
+    "happy":     MoodDelta(valence=+0.5, energy=+0.2, social=+0.2, reason="[happy] tag"),
     "smile":     MoodDelta(valence=+0.4, reason="[smile] tag"),
-    "laugh":     MoodDelta(valence=+0.5, arousal=+0.4, social=+0.3, reason="[laugh] tag"),
-    "excited":   MoodDelta(valence=+0.4, arousal=+0.6, reason="[excited] tag"),
-    "sad":       MoodDelta(valence=-0.5, arousal=-0.2, reason="[sad] tag"),
-    "angry":     MoodDelta(valence=-0.4, arousal=+0.5, social=-0.3, reason="[angry] tag"),
-    "surprised": MoodDelta(arousal=+0.5, focus=+0.3, reason="[surprised] tag"),
-    "tired":     MoodDelta(arousal=-0.6, reason="[tired] tag"),
-    "bored":     MoodDelta(arousal=-0.4, focus=-0.3, reason="[bored] tag"),
-    "calm":      MoodDelta(arousal=-0.2, valence=+0.1, reason="[calm] tag"),
-    "thinking":  MoodDelta(focus=+0.5, arousal=-0.1, reason="[thinking] tag"),
+    "laugh":     MoodDelta(valence=+0.5, energy=+0.4, social=+0.3, reason="[laugh] tag"),
+    "excited":   MoodDelta(valence=+0.4, energy=+0.6, reason="[excited] tag"),
+    "sad":       MoodDelta(valence=-0.5, energy=-0.2, reason="[sad] tag"),
+    "angry":     MoodDelta(valence=-0.4, energy=+0.5, social=-0.3, reason="[angry] tag"),
+    "surprised": MoodDelta(energy=+0.5, focus=+0.3, reason="[surprised] tag"),
+    "tired":     MoodDelta(energy=-0.6, reason="[tired] tag"),
+    "bored":     MoodDelta(energy=-0.4, focus=-0.3, reason="[bored] tag"),
+    "calm":      MoodDelta(energy=-0.2, valence=+0.1, reason="[calm] tag"),
+    "thinking":  MoodDelta(focus=+0.5, energy=-0.1, reason="[thinking] tag"),
     "confused":  MoodDelta(focus=-0.5, reason="[confused] tag"),
 }
 
@@ -152,7 +152,7 @@ def _extract_tags(text: str) -> list[str]:
 
 def _caps_word_count(text: str) -> int:
     """How many all-caps words (length >= 3) appear. "I'M" doesn't count.
-    Rough arousal proxy.
+    Rough energy proxy.
     """
     return sum(
         1
@@ -164,7 +164,7 @@ def _caps_word_count(text: str) -> int:
 def classify(user_text: str, assistant_text: str) -> MoodDelta:
     """Compute a mood delta from this turn's exchange.
 
-    The user's message gets 2x weight on valence/arousal (we track what
+    The user's message gets 2x weight on valence/energy (we track what
     the USER brought into the room) but 1x on focus (the ASSISTANT's
     focus state is more about how clearly they're thinking).
 
@@ -185,7 +185,7 @@ def classify(user_text: str, assistant_text: str) -> MoodDelta:
             d = EXPRESSION_TAGS[tag]
             explicit_delta = MoodDelta(
                 valence=explicit_delta.valence + d.valence,
-                arousal=explicit_delta.arousal + d.arousal,
+                energy=explicit_delta.energy + d.energy,
                 social=explicit_delta.social + d.social,
                 focus=explicit_delta.focus + d.focus,
                 reason=explicit_delta.reason,
@@ -204,17 +204,17 @@ def classify(user_text: str, assistant_text: str) -> MoodDelta:
         - STEP * (2 * hits(u_tokens, VALENCE_NEGATIVE) + hits(a_tokens, VALENCE_NEGATIVE))
     )
 
-    # Arousal: both streams equal. Add punctuation + caps contributions.
-    arousal = (
+    # Energy: both streams equal. Add punctuation + caps contributions.
+    energy = (
         +STEP * (hits(u_tokens, AROUSAL_HIGH) + hits(a_tokens, AROUSAL_HIGH))
         - STEP * (hits(u_tokens, AROUSAL_LOW) + hits(a_tokens, AROUSAL_LOW))
     )
     # Exclamation marks
-    arousal += 0.05 * min(4, user_text.count("!") + assistant_text.count("!"))
-    # Questions from the user often increase engagement/arousal
-    arousal += 0.03 * min(3, user_text.count("?"))
+    energy += 0.05 * min(4, user_text.count("!") + assistant_text.count("!"))
+    # Questions from the user often increase engagement/energy
+    energy += 0.03 * min(3, user_text.count("?"))
     # Caps shouting
-    arousal += 0.08 * min(3, _caps_word_count(user_text) + _caps_word_count(assistant_text))
+    energy += 0.08 * min(3, _caps_word_count(user_text) + _caps_word_count(assistant_text))
 
     # Social: weighted toward user (they're the one driving openness)
     social = (
@@ -229,10 +229,10 @@ def classify(user_text: str, assistant_text: str) -> MoodDelta:
     )
 
     # --- Combine heuristic + explicit (but scale heuristic so tags dominate) ---
-    if explicit_delta.valence or explicit_delta.arousal or explicit_delta.social or explicit_delta.focus:
+    if explicit_delta.valence or explicit_delta.energy or explicit_delta.social or explicit_delta.focus:
         # Explicit tag present — scale lexicon hits down, let the tag lead.
         valence = 0.5 * valence + explicit_delta.valence
-        arousal = 0.5 * arousal + explicit_delta.arousal
+        energy = 0.5 * energy + explicit_delta.energy
         social = 0.5 * social + explicit_delta.social
         focus = 0.5 * focus + explicit_delta.focus
 
@@ -244,8 +244,8 @@ def classify(user_text: str, assistant_text: str) -> MoodDelta:
     counts = {
         "v+": hits(u_tokens, VALENCE_POSITIVE) + hits(a_tokens, VALENCE_POSITIVE),
         "v-": hits(u_tokens, VALENCE_NEGATIVE) + hits(a_tokens, VALENCE_NEGATIVE),
-        "a+": hits(u_tokens, AROUSAL_HIGH) + hits(a_tokens, AROUSAL_HIGH),
-        "a-": hits(u_tokens, AROUSAL_LOW) + hits(a_tokens, AROUSAL_LOW),
+        "e+": hits(u_tokens, AROUSAL_HIGH) + hits(a_tokens, AROUSAL_HIGH),
+        "e-": hits(u_tokens, AROUSAL_LOW) + hits(a_tokens, AROUSAL_LOW),
     }
     nonzero = {k: v for k, v in counts.items() if v}
     if nonzero:
@@ -254,17 +254,17 @@ def classify(user_text: str, assistant_text: str) -> MoodDelta:
 
     delta = MoodDelta(
         valence=round(valence, 3),
-        arousal=round(arousal, 3),
+        energy=round(energy, 3),
         social=round(social, 3),
         focus=round(focus, 3),
         reason=reason,
     )
 
     # Only log if the delta is meaningful
-    if abs(delta.valence) + abs(delta.arousal) + abs(delta.social) + abs(delta.focus) > 0.0:
+    if abs(delta.valence) + abs(delta.energy) + abs(delta.social) + abs(delta.focus) > 0.0:
         logger.debug(
             f"MoodClassifier produced: "
-            f"v={delta.valence:+.2f} a={delta.arousal:+.2f} "
+            f"v={delta.valence:+.2f} e={delta.energy:+.2f} "
             f"s={delta.social:+.2f} f={delta.focus:+.2f} ({reason})"
         )
 

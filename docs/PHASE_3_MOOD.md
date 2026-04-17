@@ -30,13 +30,13 @@ Four scalars, each bounded to `[-1.0, 1.0]`:
 | Dim | Low (-1) | High (+1) |
 |---|---|---|
 | `valence` | sad / hurt | happy / warm |
-| `arousal` | tired / sleepy | energetic / buzzing |
+| `energy` | tired / sleepy | energetic / buzzing |
 | `social` | withdrawn / pulled-back | open / chatty |
 | `focus` | scattered / lost | sharp / dialed-in |
 
 The `mood_baseline` already defined in `characters/_persona_schema.yaml`
 is what the character decays toward when nothing is stimulating them.
-Nova's baseline: `valence=0.3, arousal=0.1, social=0.4, focus=0.5` —
+Nova's baseline: `valence=0.3, energy=0.1, social=0.4, focus=0.5` —
 so her default resting state is warm, moderately open, and dialed-in.
 
 ---
@@ -119,10 +119,10 @@ ways, kept the clause.
 
 `MoodState.quadrant()` collapses the four-dim vector to one of:
 
-- `"calm"`     — low-ish arousal, non-negative valence → `Idle_calm`
-- `"tired"`    — low arousal, negative valence        → `Idle_tired`
-- `"excited"`  — high arousal, non-negative valence   → `Idle_excited`
-- `"focused"`  — high arousal AND high focus          → `Idle_focused`
+- `"calm"`     — low-ish energy, non-negative valence → `Idle_calm`
+- `"tired"`    — low energy, negative valence        → `Idle_tired`
+- `"excited"`  — high energy, non-negative valence   → `Idle_excited`
+- `"focused"`  — high energy AND high focus          → `Idle_focused`
 
 Phase 4 will push these labels over WebSocket and the frontend will
 switch motion pools based on them.
@@ -140,9 +140,9 @@ Serialized field:
   "rolling_summary": "...",
   "turns_since_summary": 2,
   "mood": {
-    "baseline": {"valence": 0.3, "arousal": 0.1, ...},
+    "baseline": {"valence": 0.3, "energy": 0.1, ...},
     "valence": -0.81,
-    "arousal": 0.0,
+    "energy": 0.0,
     "social": 0.0,
     "focus": 0.0,
     "last_update": 1776423456.78
@@ -170,9 +170,9 @@ Eight tests, all must pass:
 3. Decay math: 1 half-life = halfway, 3 half-lives = 1/8th distance
 4. `apply_delta` moves by `weight * delta`, clamps, timestamps
 5. JSON roundtrip preserves all 4 axes + baseline
-6. Classifier: happy text gets +valence/+arousal, sad text gets
+6. Classifier: happy text gets +valence/+energy, sad text gets
    -valence, neutral text stays near zero, `[angry]` tag gets
-   -valence/+arousal
+   -valence/+energy
 7. Composer includes mood line in the prompt when mood is set
 8. LIVE: sad deltas drop valence, happy deltas raise it, quadrant
    transitions from `calm` → `tired` → `excited`, and mood survives
@@ -199,8 +199,8 @@ both still pass. No regressions.
 
 The exponential-decay-toward-baseline pattern comes directly from
 the affect dynamics literature — Russell's circumplex model of
-affect (1980) defines the valence + arousal plane we extend here;
-Mehrabian's PAD (Pleasure/Arousal/Dominance) model also uses
+affect (1980) defines the valence + energy plane we extend here;
+Mehrabian's PAD (Pleasure/Energy/Dominance) model also uses
 decay-to-baseline. Nothing novel — disciplined engineering on top
 of forty-year-old psych research, wired into the persona pipeline
 Phase 2a built.

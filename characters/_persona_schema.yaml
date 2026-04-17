@@ -55,7 +55,7 @@ taboos:
 # to 0.0 (neutral). Omit the whole block to stay at neutral baseline.
 mood_baseline:
   valence: 0.3    # mildly positive / warm by default
-  arousal: 0.1    # slightly energetic but not hyped
+  energy: 0.1    # slightly energetic but not hyped
   social: 0.4     # open and chatty
   focus: 0.5      # dialed-in is the resting state
 

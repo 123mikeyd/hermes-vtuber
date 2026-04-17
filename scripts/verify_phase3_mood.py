@@ -6,7 +6,7 @@ Tests:
   2. Decay moves toward baseline at the expected half-life
   3. apply_delta nudges the vector, clamps, updates timestamp
   4. Serialization roundtrips through JSON cleanly
-  5. Classifier reads positive / negative / high-arousal lexicons
+  5. Classifier reads positive / negative / high-energy lexicons
   6. Composer includes a mood line in the system prompt
   7. LIVE: HermesAgent.chat() drifts mood across a conversation
      and the drift is visible in SessionMemory JSON after each turn.
@@ -52,10 +52,10 @@ def section(title: str) -> None:
 
 def test_mood_init() -> None:
     section("Test 1: MoodState starts at baseline")
-    baseline = MoodBaseline(valence=0.3, arousal=0.1, social=0.4, focus=0.5)
+    baseline = MoodBaseline(valence=0.3, energy=0.1, social=0.4, focus=0.5)
     mood = MoodState(baseline=baseline)
     assert abs(mood.valence - 0.3) < 1e-9, f"valence: {mood.valence}"
-    assert abs(mood.arousal - 0.1) < 1e-9
+    assert abs(mood.energy - 0.1) < 1e-9
     assert abs(mood.social - 0.4) < 1e-9
     assert abs(mood.focus - 0.5) < 1e-9
     print(f"[OK] MoodState starts at baseline: {mood.to_dict()}")
@@ -63,10 +63,10 @@ def test_mood_init() -> None:
 
 def test_mood_clamping() -> None:
     section("Test 2: Mood values clamp to [-1, 1]")
-    mood = MoodState(valence=2.5, arousal=-5.0)
+    mood = MoodState(valence=2.5, energy=-5.0)
     assert mood.valence == 1.0, f"valence not clamped: {mood.valence}"
-    assert mood.arousal == -1.0
-    print(f"[OK] out-of-range inputs clamped: v={mood.valence}, a={mood.arousal}")
+    assert mood.energy == -1.0
+    print(f"[OK] out-of-range inputs clamped: v={mood.valence}, e={mood.energy}")
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +113,8 @@ def test_apply_delta() -> None:
 
 def test_serialization() -> None:
     section("Test 5: MoodState roundtrips through JSON")
-    baseline = MoodBaseline(valence=0.3, arousal=0.1)
-    mood = MoodState(baseline=baseline, valence=-0.4, arousal=0.6, social=0.2, focus=-0.1)
+    baseline = MoodBaseline(valence=0.3, energy=0.1)
+    mood = MoodState(baseline=baseline, valence=-0.4, energy=0.6, social=0.2, focus=-0.1)
     mood.last_update = time.time()
 
     d = mood.to_dict()
@@ -122,7 +122,7 @@ def test_serialization() -> None:
     decoded = json.loads(encoded)
     mood2 = MoodState.from_dict(decoded)
 
-    for axis in ("valence", "arousal", "social", "focus"):
+    for axis in ("valence", "energy", "social", "focus"):
         assert abs(getattr(mood, axis) - getattr(mood2, axis)) < 1e-3, (
             f"{axis} drift on roundtrip: {getattr(mood, axis)} -> {getattr(mood2, axis)}"
         )
@@ -142,21 +142,21 @@ def test_classifier() -> None:
         assistant_text="Wonderful! Let's go. That's awesome.",
     )
     assert happy.valence > 0.0, f"expected positive valence, got {happy.valence}"
-    assert happy.arousal > 0.0, f"expected positive arousal, got {happy.arousal}"
-    print(f"[OK] happy text: v={happy.valence:+.2f} a={happy.arousal:+.2f}")
+    assert happy.energy > 0.0, f"expected positive energy, got {happy.energy}"
+    print(f"[OK] happy text: v={happy.valence:+.2f} e={happy.energy:+.2f}")
 
     sad = mood_classify(
         user_text="I'm tired, frustrated, and I hate this. Everything is broken.",
         assistant_text="I'm sorry you're feeling that way.",
     )
     assert sad.valence < -0.1, f"expected very negative valence, got {sad.valence}"
-    print(f"[OK] sad text: v={sad.valence:+.2f} a={sad.arousal:+.2f}")
+    print(f"[OK] sad text: v={sad.valence:+.2f} e={sad.energy:+.2f}")
 
     neutral = mood_classify(
         user_text="What time is it.",
         assistant_text="It is currently 3 pm.",
     )
-    mag = abs(neutral.valence) + abs(neutral.arousal) + abs(neutral.social) + abs(neutral.focus)
+    mag = abs(neutral.valence) + abs(neutral.energy) + abs(neutral.social) + abs(neutral.focus)
     assert mag < 0.5, f"neutral text should produce small delta, got mag={mag}"
     print(f"[OK] neutral text: low magnitude {mag:.2f}")
 
@@ -164,10 +164,10 @@ def test_classifier() -> None:
         user_text="whatever",
         assistant_text="[angry] I said no!",
     )
-    assert explicit_tag.valence < 0 and explicit_tag.arousal > 0, (
+    assert explicit_tag.valence < 0 and explicit_tag.energy > 0, (
         f"[angry] tag should push v-, a+: {explicit_tag}"
     )
-    print(f"[OK] explicit [angry] tag: v={explicit_tag.valence:+.2f} a={explicit_tag.arousal:+.2f}")
+    print(f"[OK] explicit [angry] tag: v={explicit_tag.valence:+.2f} e={explicit_tag.energy:+.2f}")
 
 
 # ---------------------------------------------------------------------------
@@ -184,8 +184,8 @@ def test_composer_mood_line() -> None:
     mem = SessionMemory()
     mem.ensure_mood(identity.mood_baseline)
     # Push mood hard negative
-    mem.mood.apply_delta(MoodDelta(valence=-1.0, arousal=-1.0, reason="test"))
-    mem.mood.apply_delta(MoodDelta(valence=-1.0, arousal=-1.0, reason="test"))
+    mem.mood.apply_delta(MoodDelta(valence=-1.0, energy=-1.0, reason="test"))
+    mem.mood.apply_delta(MoodDelta(valence=-1.0, energy=-1.0, reason="test"))
     mem.add_turn("user", "anything")
     mem.add_turn("assistant", "anything")
 
@@ -215,7 +215,7 @@ async def test_live_mood_drift() -> None:
             "You are Drifter, a small test character. Respond in 10 words or less. "
             "You reflect back the user's energy."
         ),
-        mood_baseline=MoodBaseline(valence=0.0, arousal=0.0),
+        mood_baseline=MoodBaseline(valence=0.0, energy=0.0),
     )
 
     with tempfile.TemporaryDirectory() as td:
@@ -262,7 +262,7 @@ async def test_live_mood_drift() -> None:
         after_happy = mem.mood.snapshot()
         print(f"After 4 happy deltas: {after_happy}")
         assert after_happy["valence"] > after_sad["valence"], "valence should rise"
-        assert after_happy["arousal"] > after_sad["arousal"], "arousal should rise"
+        assert after_happy["energy"] > after_sad["energy"], "energy should rise"
         print(f"[OK] mood flipped: valence {after_sad['valence']:+.2f} -> {after_happy['valence']:+.2f}")
 
         # Reload from disk — mood should survive restart

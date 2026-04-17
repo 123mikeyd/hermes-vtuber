@@ -68,7 +68,7 @@ class MoodDelta:
     """
 
     valence: float = 0.0
-    arousal: float = 0.0
+    energy: float = 0.0
     social: float = 0.0
     focus: float = 0.0
 
@@ -92,7 +92,7 @@ class MoodState:
     baseline: MoodBaseline = field(default_factory=MoodBaseline)
 
     valence: float = 0.0
-    arousal: float = 0.0
+    energy: float = 0.0
     social: float = 0.0
     focus: float = 0.0
 
@@ -104,9 +104,9 @@ class MoodState:
     def __post_init__(self) -> None:
         # Initialize to baseline on first construction — more natural
         # than starting at all-zeros if the baseline was specified.
-        if self.valence == self.arousal == self.social == self.focus == 0.0:
+        if self.valence == self.energy == self.social == self.focus == 0.0:
             self.valence = self.baseline.valence
-            self.arousal = self.baseline.arousal
+            self.energy = self.baseline.energy
             self.social = self.baseline.social
             self.focus = self.baseline.focus
         # Hard-clamp in case something handed us garbage.
@@ -117,7 +117,7 @@ class MoodState:
     def _clamp(self) -> None:
         """Hard-clamp every dimension to [MOOD_MIN, MOOD_MAX]."""
         self.valence = max(MOOD_MIN, min(MOOD_MAX, self.valence))
-        self.arousal = max(MOOD_MIN, min(MOOD_MAX, self.arousal))
+        self.energy = max(MOOD_MIN, min(MOOD_MAX, self.energy))
         self.social = max(MOOD_MIN, min(MOOD_MAX, self.social))
         self.focus = max(MOOD_MIN, min(MOOD_MAX, self.focus))
 
@@ -144,7 +144,7 @@ class MoodState:
         factor = math.pow(0.5, elapsed / MOOD_HALFLIFE_SECONDS)
 
         self.valence = self.baseline.valence + (self.valence - self.baseline.valence) * factor
-        self.arousal = self.baseline.arousal + (self.arousal - self.baseline.arousal) * factor
+        self.energy = self.baseline.energy + (self.energy - self.baseline.energy) * factor
         self.social = self.baseline.social + (self.social - self.baseline.social) * factor
         self.focus = self.baseline.focus + (self.focus - self.baseline.focus) * factor
 
@@ -161,7 +161,7 @@ class MoodState:
 
         w = MOOD_UPDATE_WEIGHT
         self.valence += w * delta.valence
-        self.arousal += w * delta.arousal
+        self.energy += w * delta.energy
         self.social += w * delta.social
         self.focus += w * delta.focus
         self._clamp()
@@ -169,9 +169,9 @@ class MoodState:
         if delta.reason:
             logger.debug(
                 f"Mood delta applied ({delta.reason}): "
-                f"v={delta.valence:+.2f} a={delta.arousal:+.2f} "
+                f"v={delta.valence:+.2f} e={delta.energy:+.2f} "
                 f"s={delta.social:+.2f} f={delta.focus:+.2f} -> "
-                f"v={self.valence:+.2f} a={self.arousal:+.2f} "
+                f"v={self.valence:+.2f} e={self.energy:+.2f} "
                 f"s={self.social:+.2f} f={self.focus:+.2f}"
             )
 
@@ -203,14 +203,14 @@ class MoodState:
         else:
             parts.append("even-keeled")
 
-        # Arousal word
-        if self.arousal > 0.5:
+        # Energy word
+        if self.energy > 0.5:
             parts.append("buzzing with energy")
-        elif self.arousal > 0.15:
+        elif self.energy > 0.15:
             parts.append("alert")
-        elif self.arousal < -0.5:
+        elif self.energy < -0.5:
             parts.append("tired")
-        elif self.arousal < -0.15:
+        elif self.energy < -0.15:
             parts.append("slow-paced")
 
         # Social word
@@ -239,19 +239,19 @@ class MoodState:
         """Return one of the four idle-pool labels for Phase 4 frontend
         consumption:
 
-            "calm"     — low arousal, non-negative valence
-            "tired"    — low arousal, negative valence
-            "excited"  — high arousal, non-negative valence
-            "focused"  — high arousal, high focus (overrides excited)
+            "calm"     — low energy, non-negative valence
+            "tired"    — low energy, negative valence
+            "excited"  — high energy, non-negative valence
+            "focused"  — high energy, high focus (overrides excited)
 
         These map 1:1 to the Idle_calm / Idle_tired / Idle_excited /
         Idle_focused motion groups Phase 4 will introduce in model3.json.
         """
-        if self.arousal >= 0.15:
+        if self.energy >= 0.15:
             if self.focus >= 0.4:
                 return "focused"
             return "excited"
-        # Low-ish arousal
+        # Low-ish energy
         if self.valence < -0.1:
             return "tired"
         return "calm"
@@ -263,7 +263,7 @@ class MoodState:
         return {
             "baseline": asdict(self.baseline),
             "valence": round(self.valence, 4),
-            "arousal": round(self.arousal, 4),
+            "energy": round(self.energy, 4),
             "social": round(self.social, 4),
             "focus": round(self.focus, 4),
             "last_update": self.last_update,
@@ -273,18 +273,22 @@ class MoodState:
     def from_dict(cls, data: Dict[str, Any]) -> "MoodState":
         """Load from the dict shape emitted by to_dict(). Tolerates
         missing fields for forward-compat (old saves, new fields).
+
+        Backward-compat: older saves used "arousal" for what is now
+        called "energy". We accept both keys on load and quietly
+        migrate — next save() writes the new key, old one dropped.
         """
         bline_raw = data.get("baseline") or {}
         baseline = MoodBaseline(
             valence=float(bline_raw.get("valence", 0.0)),
-            arousal=float(bline_raw.get("arousal", 0.0)),
+            energy=float(bline_raw.get("energy", bline_raw.get("arousal", 0.0))),
             social=float(bline_raw.get("social", 0.0)),
             focus=float(bline_raw.get("focus", 0.0)),
         )
         return cls(
             baseline=baseline,
             valence=float(data.get("valence", baseline.valence)),
-            arousal=float(data.get("arousal", baseline.arousal)),
+            energy=float(data.get("energy", data.get("arousal", baseline.energy))),
             social=float(data.get("social", baseline.social)),
             focus=float(data.get("focus", baseline.focus)),
             last_update=data.get("last_update"),
@@ -299,7 +303,7 @@ class MoodState:
         """
         return {
             "valence": round(self.valence, 3),
-            "arousal": round(self.arousal, 3),
+            "energy": round(self.energy, 3),
             "social": round(self.social, 3),
             "focus": round(self.focus, 3),
             "quadrant": self.quadrant(),

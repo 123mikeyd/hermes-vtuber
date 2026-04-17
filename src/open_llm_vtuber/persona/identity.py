@@ -45,14 +45,14 @@ class MoodBaseline:
     """
 
     valence: float = 0.0  # sad/upset (-1) ↔ happy/warm (+1)
-    arousal: float = 0.0  # tired/sleepy (-1) ↔ energetic/hyped (+1)
+    energy: float = 0.0  # tired/sleepy (-1) ↔ energetic/hyped (+1)
     social: float = 0.0   # withdrawn (-1) ↔ open/chatty (+1)
     focus: float = 0.0    # scattered (-1) ↔ sharp/dialed-in (+1)
 
     def __post_init__(self) -> None:
         for name, value in (
             ("valence", self.valence),
-            ("arousal", self.arousal),
+            ("energy", self.energy),
             ("social", self.social),
             ("focus", self.focus),
         ):
@@ -177,7 +177,7 @@ def load_identity(source: Union[str, Path, Dict[str, Any]]) -> Identity:
     elif isinstance(mood_raw, dict):
         mood = MoodBaseline(
             valence=float(mood_raw.get("valence", 0.0)),
-            arousal=float(mood_raw.get("arousal", 0.0)),
+            energy=float(mood_raw.get("energy", mood_raw.get("arousal", 0.0))),
             social=float(mood_raw.get("social", 0.0)),
             focus=float(mood_raw.get("focus", 0.0)),
         )

@@ -236,14 +236,14 @@ Start small — four scalars, each `[-1.0, 1.0]`:
 | Dim | Low end | High end |
 |---|---|---|
 | `valence` | sad / upset | happy / warm |
-| `arousal` | tired / sleepy | energetic / hyped |
+| `energy` | tired / sleepy | energetic / hyped |
 | `social` | withdrawn / distant | open / chatty |
 | `focus` | scattered / distracted | sharp / dialed-in |
 
 Persisted in Tier 3 session memory (Phase 2). Updated after each assistant
 turn by a cheap classifier (lightweight local model or a Hermes call with a
 fixed format prompt). Decays toward a character-defined baseline over time
-— each character has `mood_baseline: {valence: 0.3, arousal: 0.0, ...}` in
+— each character has `mood_baseline: {valence: 0.3, energy: 0.0, ...}` in
 their identity schema.
 
 ### Surfacing it
@@ -269,7 +269,7 @@ play mood cues way too hard.
 
 Verification:
  - Talk to the character about something sad for 5 turns. `valence` drops.
- - Switch to something exciting. `valence` recovers, `arousal` rises.
+ - Switch to something exciting. `valence` recovers, `energy` rises.
  - Walk away 30 minutes, come back. Mood has decayed partway toward baseline.
  - Log of mood changes is human-readable for debugging.
 
@@ -316,7 +316,7 @@ frame, a head-tilt).
 - Documentation update in skill SKILL.md with the new `Idle_*` model3.json convention
 
 Verification:
- - Shift mood low/high-arousal. Server logs show `mood_update` going out.
+ - Shift mood low/high-energy. Server logs show `mood_update` going out.
  - Frontend console logs pool switch. Idle motion visibly changes within 10s.
 
 ---

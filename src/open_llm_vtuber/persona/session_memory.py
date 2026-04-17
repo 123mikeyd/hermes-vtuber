@@ -244,7 +244,7 @@ class SessionMemory:
             self.mood = MoodState(baseline=baseline)
             logger.info(
                 f"SessionMemory.ensure_mood: created MoodState at baseline "
-                f"v={baseline.valence:+.2f} a={baseline.arousal:+.2f} "
+                f"v={baseline.valence:+.2f} e={baseline.energy:+.2f} "
                 f"s={baseline.social:+.2f} f={baseline.focus:+.2f}"
             )
         return self.mood
