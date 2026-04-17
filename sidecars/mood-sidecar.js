@@ -219,7 +219,8 @@
         // We only care about JSON text frames
         if (typeof evt.data !== 'string') return;
         if (evt.data.indexOf('mood_update') === -1 &&
-            evt.data.indexOf('listening_state') === -1) {
+            evt.data.indexOf('listening_state') === -1 &&
+            evt.data.indexOf('expression_blend') === -1) {
           // Quick reject for the ~99% of messages that aren't ours
           return;
         }
@@ -227,6 +228,7 @@
           const msg = JSON.parse(evt.data);
           if (msg.type === 'mood_update') handleMoodUpdate(msg);
           else if (msg.type === 'listening_state') handleListeningState(msg);
+          else if (msg.type === 'expression_blend') handleExpressionBlend(msg);
         } catch (e) {
           // Not JSON or not our schema — ignore.
         }
@@ -286,6 +288,105 @@
   }
 
   // ---------------------------------------------------------------------
+  // Phase 5 — expression_blend handler
+  //
+  // Receives per-sentence affect blend + parameter deltas. Applies the
+  // deltas to the loaded Live2D model on every animation frame for
+  // duration_ms milliseconds, with a triangle-wave envelope (0 -> peak
+  // -> 0). This way the expression "swells" with the sentence then
+  // fades, leaving room for the next sentence's blend to take over.
+  //
+  // Multiple overlapping sentences will queue — newer ones REPLACE
+  // older ones rather than blend, because LLMs typically generate
+  // sentences faster than TTS can speak them and we want the most
+  // recent affect to dominate.
+  // ---------------------------------------------------------------------
+
+  let activeBlend = null;  // {deltas, durationMs, startTimeMs}
+
+  function handleExpressionBlend(msg) {
+    const deltas = msg.deltas || {};
+    const durationMs = Math.max(100, msg.duration_ms || 600);
+    if (Object.keys(deltas).length === 0) return;
+    activeBlend = {
+      deltas: deltas,
+      durationMs: durationMs,
+      startTimeMs: performance.now(),
+    };
+    if (msg.blend) {
+      const intensity = Object.values(msg.blend).reduce((a, b) => a + b, 0);
+      log(`expression: ${msg.reason || 'unknown'}, ` +
+          `intensity ${intensity.toFixed(2)}, ` +
+          `params ${Object.keys(deltas).join(',')}`);
+    }
+  }
+
+  /**
+   * Apply the active blend's parameter deltas to the model THIS FRAME.
+   * Triangle envelope: 0 at t=0, full at t=duration/2, 0 at t=duration.
+   * Called from a requestAnimationFrame loop.
+   */
+  function applyActiveBlend() {
+    if (!activeBlend) return;
+    const elapsed = performance.now() - activeBlend.startTimeMs;
+    if (elapsed > activeBlend.durationMs) {
+      activeBlend = null;
+      return;
+    }
+
+    const half = activeBlend.durationMs / 2;
+    let envelope;
+    if (elapsed < half) {
+      envelope = elapsed / half;          // 0 -> 1
+    } else {
+      envelope = (activeBlend.durationMs - elapsed) / half;  // 1 -> 0
+    }
+
+    const manager = getLive2DManagerSafe();
+    if (!manager) return;
+    const model = manager.getModel(0);
+    if (!model || !model._model) return;
+
+    // Apply each delta to its parameter. addParameterValueById ADDS to
+    // whatever the motion has already set this frame, so we layer
+    // expression on top of motion without overwriting.
+    try {
+      for (const paramId in activeBlend.deltas) {
+        const value = activeBlend.deltas[paramId] * envelope;
+        if (typeof model.addParameterValueById === 'function') {
+          model.addParameterValueById(paramId, value);
+        } else if (typeof model._model.addParameterValue === 'function') {
+          // Fallback for different SDK versions
+          const idx = model._model.getParameterIndex(paramId);
+          if (idx >= 0) {
+            model._model.addParameterValue(idx, value);
+          }
+        }
+      }
+    } catch (e) {
+      // Silent — applyActiveBlend runs every frame, don't spam the console
+    }
+  }
+
+  // Frame loop for expression blending
+  let frameLoopHandle = null;
+  function startFrameLoop() {
+    if (frameLoopHandle) return;
+    function loop() {
+      applyActiveBlend();
+      frameLoopHandle = requestAnimationFrame(loop);
+    }
+    frameLoopHandle = requestAnimationFrame(loop);
+    log('expression frame loop started');
+  }
+  function stopFrameLoop() {
+    if (frameLoopHandle) {
+      cancelAnimationFrame(frameLoopHandle);
+      frameLoopHandle = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------------
 
@@ -293,15 +394,18 @@
     try {
       installWebSocketIntercept();
       startIdlePoll();
+      startFrameLoop();
       log('initialized — waiting for first mood_update from server');
       // Expose a debug surface for manual inspection in DevTools
       window.__moodSidecar = {
         state,
+        get activeBlend() { return activeBlend; },
         pickNextMotion,
         resolveMotionByFilename,
         forceStart: maybeStartNextIdle,
-        disable: () => { state.enabled = false; stopIdlePoll(); },
-        enable: () => { state.enabled = true; startIdlePoll(); },
+        triggerExpression: handleExpressionBlend,  // for manual testing
+        disable: () => { state.enabled = false; stopIdlePoll(); stopFrameLoop(); },
+        enable: () => { state.enabled = true; startIdlePoll(); startFrameLoop(); },
       };
     } catch (e) {
       warn('boot failed:', e);

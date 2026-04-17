@@ -30,6 +30,12 @@ from .pool_map import (
     resolve_pool,
     HERMES_DARK_POOL,
 )
+from .expression_inference import (
+    AffectBlend,
+    infer as expression_infer,
+    blend_to_param_deltas,
+    build_expression_message,
+)
 
 __all__ = [
     "Identity",
@@ -50,4 +56,9 @@ __all__ = [
     "get_pool_for_model",
     "resolve_pool",
     "HERMES_DARK_POOL",
+    # Phase 5
+    "AffectBlend",
+    "expression_infer",
+    "blend_to_param_deltas",
+    "build_expression_message",
 ]
