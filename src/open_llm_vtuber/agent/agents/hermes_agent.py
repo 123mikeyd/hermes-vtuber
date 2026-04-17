@@ -493,28 +493,37 @@ class HermesAgent(AgentInterface):
             # text is the only signal available pre-turn. Post-turn we
             # reclassify with both sides, catching any affect shift the
             # assistant's own reply introduced.
+            #
+            # Wrapped in try/except: mood is best-effort. A classifier
+            # bug must NEVER break a turn — Nova going silent would be
+            # worse than a stale mood vector.
             if self._identity is not None:
-                self._session_memory.ensure_mood(self._identity.mood_baseline)
-                from ...persona.mood_classifier import classify as _mood_classify
-                pre_delta = _mood_classify(user_text, "")
-                if (abs(pre_delta.valence) + abs(pre_delta.energy)
-                        + abs(pre_delta.social) + abs(pre_delta.focus)) > 0.0:
-                    # Apply at HALF weight pre-turn so the full exchange
-                    # (applied post-turn) still has room to move the
-                    # vector. Otherwise strong pre-turn deltas would
-                    # saturate the axis and the post-turn delta would
-                    # be a no-op.
-                    from ...persona.mood import MoodDelta as _MoodDelta
-                    halved = _MoodDelta(
-                        valence=pre_delta.valence * 0.5,
-                        energy=pre_delta.energy * 0.5,
-                        social=pre_delta.social * 0.5,
-                        focus=pre_delta.focus * 0.5,
-                        reason=f"pre-turn: {pre_delta.reason}",
+                try:
+                    self._session_memory.ensure_mood(self._identity.mood_baseline)
+                    from ...persona.mood_classifier import classify as _mood_classify
+                    pre_delta = _mood_classify(user_text, "")
+                    if (abs(pre_delta.valence) + abs(pre_delta.energy)
+                            + abs(pre_delta.social) + abs(pre_delta.focus)) > 0.0:
+                        # Apply at HALF weight pre-turn so the full exchange
+                        # (applied post-turn) still has room to move the
+                        # vector. Otherwise strong pre-turn deltas would
+                        # saturate the axis and the post-turn delta would
+                        # be a no-op.
+                        from ...persona.mood import MoodDelta as _MoodDelta
+                        halved = _MoodDelta(
+                            valence=pre_delta.valence * 0.5,
+                            energy=pre_delta.energy * 0.5,
+                            social=pre_delta.social * 0.5,
+                            focus=pre_delta.focus * 0.5,
+                            reason=f"pre-turn: {pre_delta.reason}",
+                        )
+                        self._session_memory.mood.apply_delta(halved)
+                        # Touch the quadrant so any transition gets logged now
+                        self._session_memory.mood.quadrant()
+                except Exception as _pre_err:
+                    logger.warning(
+                        f"Pre-turn mood classification failed (non-fatal): {_pre_err}"
                     )
-                    self._session_memory.mood.apply_delta(halved)
-                    # Touch the quadrant so any transition gets logged now
-                    self._session_memory.mood.quadrant()
 
             # Build prompt (differs for first turn vs resume)
             prompt = self._build_prompt(user_text)
@@ -538,18 +547,27 @@ class HermesAgent(AgentInterface):
             # Phase 3: classify the exchange and nudge the mood vector.
             # Only runs when an Identity is attached (so we have a baseline).
             # Heuristic classifier — microseconds, no extra subprocess.
+            #
+            # Wrapped in try/except like the pre-turn path: mood is
+            # best-effort. A bug here must NEVER hide the assistant's
+            # response from the user.
             if self._identity is not None:
-                self._session_memory.ensure_mood(self._identity.mood_baseline)
-                from ...persona.mood_classifier import classify as _mood_classify
-                delta = _mood_classify(user_text, full_response)
-                self._session_memory.mood.apply_delta(delta)
-                # Phase 4: touch quadrant() so hysteresis evaluates and
-                # any transition gets logged and persisted alongside
-                # the vector. Without this, current_quadrant is stale
-                # on save and the mood_update WebSocket message picks
-                # up the OLD quadrant label.
-                self._session_memory.mood.quadrant()
-                self._session_memory.save()  # persist updated mood + quadrant
+                try:
+                    self._session_memory.ensure_mood(self._identity.mood_baseline)
+                    from ...persona.mood_classifier import classify as _mood_classify
+                    delta = _mood_classify(user_text, full_response)
+                    self._session_memory.mood.apply_delta(delta)
+                    # Phase 4: touch quadrant() so hysteresis evaluates and
+                    # any transition gets logged and persisted alongside
+                    # the vector. Without this, current_quadrant is stale
+                    # on save and the mood_update WebSocket message picks
+                    # up the OLD quadrant label.
+                    self._session_memory.mood.quadrant()
+                    self._session_memory.save()  # persist updated mood + quadrant
+                except Exception as _post_err:
+                    logger.warning(
+                        f"Post-turn mood classification failed (non-fatal): {_post_err}"
+                    )
 
             if self._session_memory.needs_summary():
                 # Fire-and-forget: schedule summarization but don't await.
