@@ -123,11 +123,11 @@ def test_param_mapping() -> None:
     assert deltas.get("PARAM_BROW_L_Y", 0.0) > 0.0, "brows lift"
     assert deltas.get("PARAM_EYE_L_OPEN", 0.0) > 0.0, "eyes open wide"
 
-    # Aggregated deltas should clamp at ±0.5
+    # Aggregated deltas should clamp at ±0.8 (Phase 4.5 raised from 0.5)
     blend = AffectBlend(joy=1.0, surprise=1.0)  # both want brows up
     deltas = blend_to_param_deltas(blend)
     for v in deltas.values():
-        assert abs(v) <= 0.5 + 1e-6, f"delta {v} exceeds ±0.5 clamp"
+        assert abs(v) <= 0.8 + 1e-6, f"delta {v} exceeds ±0.8 clamp"
     print(f"joy+surprise (clamped): max delta = {max(abs(v) for v in deltas.values()):.2f}")
     print("[OK] param mapping produces sensible Live2D deltas")
 

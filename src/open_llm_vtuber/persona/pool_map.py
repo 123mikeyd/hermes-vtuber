@@ -140,22 +140,32 @@ def get_pool_for_model(model_name: str) -> Optional[PoolMap]:
 HERMES_DARK_POOL = PoolMap(
     model_name="hermes_dark",
     calm=[
+        # Phase 4.5 — new warm calm motion leads the pool so the
+        # visible baseline smile reads first
+        "motion/idle_calm_warm.motion3.json",
         "motion/idle_arms_down.motion3.json",
         "motion/idle_calm.motion3.json",
         "motion/look_aside.motion3.json",
     ],
     tired=[
+        # Phase 4.5 — new slump motion leads, followed by the
+        # placeholder droop and the creeper fallback
+        "motion/idle_tired_slump.motion3.json",
         "motion/creeper_!.motion3.json",
-        # Placeholder — Phase 4 adds programmatically-authored motion:
         "motion/idle_tired_droop.motion3.json",
     ],
     excited=[
+        # Phase 4.5 — bouncy is the primary excited; Laughing_Test
+        # stays as a strong alternate; Come on down for variety
+        "motion/idle_excited_bouncy.motion3.json",
         "motion/Laughing_Test.motion3.json",
         "motion/Come on down.motion3.json",
     ],
     focused=[
+        # Phase 4.5 — intent is the primary; old lean + calm_02 as
+        # alternates
+        "motion/idle_focused_intent.motion3.json",
         "motion/idle_calm_02.motion3.json",
-        # Placeholder — Phase 4 adds programmatically-authored motion:
         "motion/idle_focused_lean.motion3.json",
     ],
     listening=[

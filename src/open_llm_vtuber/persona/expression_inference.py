@@ -270,41 +270,42 @@ def infer(sentence: str) -> AffectBlend:
 
 PARAM_MAP: Dict[str, List[Tuple[str, float]]] = {
     "joy": [
-        ("PARAM_MOUTH_FORM", +0.30),    # smile
-        ("PARAM_BROW_L_Y", +0.10),      # brows lift slightly
-        ("PARAM_BROW_R_Y", +0.10),
-        ("PARAM_EYE_L_OPEN", +0.05),    # eyes widen a hair
-        ("PARAM_EYE_R_OPEN", +0.05),
+        ("PARAM_MOUTH_FORM", +0.50),    # smile, visible
+        ("PARAM_BROW_L_Y", +0.20),      # brows lift
+        ("PARAM_BROW_R_Y", +0.20),
+        ("PARAM_EYE_L_OPEN", +0.10),    # eyes widen a touch
+        ("PARAM_EYE_R_OPEN", +0.10),
+        ("PARAM_TERE", +0.15),          # soft blush on strong joy
     ],
     "sadness": [
-        ("PARAM_MOUTH_FORM", -0.25),    # frown
-        ("PARAM_BROW_L_Y", -0.20),      # brows down
-        ("PARAM_BROW_R_Y", -0.20),
-        ("PARAM_BROW_L_ANGLE", +0.20),  # inner-brow tilt up (sad face)
-        ("PARAM_BROW_R_ANGLE", -0.20),
-        ("PARAM_EYE_L_OPEN", -0.15),    # half-lidded
-        ("PARAM_EYE_R_OPEN", -0.15),
+        ("PARAM_MOUTH_FORM", -0.45),    # clear frown
+        ("PARAM_BROW_L_Y", -0.35),      # brows down
+        ("PARAM_BROW_R_Y", -0.35),
+        ("PARAM_BROW_L_ANGLE", +0.35),  # inner-brow up (sad face)
+        ("PARAM_BROW_R_ANGLE", -0.35),
+        ("PARAM_EYE_L_OPEN", -0.25),    # lids droop
+        ("PARAM_EYE_R_OPEN", -0.25),
     ],
     "anger": [
-        ("PARAM_BROW_L_Y", -0.30),      # brows down hard
-        ("PARAM_BROW_R_Y", -0.30),
-        ("PARAM_BROW_L_ANGLE", -0.20),  # inner-brow down (angry V)
-        ("PARAM_BROW_R_ANGLE", +0.20),
-        ("PARAM_MOUTH_FORM", -0.15),    # slight downturn
+        ("PARAM_BROW_L_Y", -0.50),      # brows SLAM down
+        ("PARAM_BROW_R_Y", -0.50),
+        ("PARAM_BROW_L_ANGLE", -0.35),  # inner-brow down (angry V)
+        ("PARAM_BROW_R_ANGLE", +0.35),
+        ("PARAM_MOUTH_FORM", -0.25),    # downturn
     ],
     "surprise": [
-        ("PARAM_BROW_L_Y", +0.30),      # brows fly up
-        ("PARAM_BROW_R_Y", +0.30),
-        ("PARAM_EYE_L_OPEN", +0.30),    # eyes open wide
-        ("PARAM_EYE_R_OPEN", +0.30),
-        ("PARAM_MOUTH_OPEN_Y", +0.15),  # mouth opens slightly
+        ("PARAM_BROW_L_Y", +0.55),      # brows fly up, hard
+        ("PARAM_BROW_R_Y", +0.55),
+        ("PARAM_EYE_L_OPEN", +0.50),    # eyes SAUCERS
+        ("PARAM_EYE_R_OPEN", +0.50),
+        ("PARAM_MOUTH_OPEN_Y", +0.30),  # mouth opens visibly
     ],
     "shy_blush": [
-        ("PARAM_TERE", +0.30),          # blush
-        ("PARAM_EYE_BALL_Y", -0.15),    # gaze drops
-        ("PARAM_MOUTH_FORM", +0.05),    # tiny shy smile
-        ("PARAM_BROW_L_Y", -0.05),      # brows soften down
-        ("PARAM_BROW_R_Y", -0.05),
+        ("PARAM_TERE", +0.55),          # full blush
+        ("PARAM_EYE_BALL_Y", -0.25),    # gaze drops
+        ("PARAM_MOUTH_FORM", +0.15),    # shy smile
+        ("PARAM_BROW_L_Y", -0.10),      # brows soften
+        ("PARAM_BROW_R_Y", -0.10),
     ],
 }
 
@@ -359,22 +360,30 @@ def blend_to_param_deltas(
             deltas[param_id] = deltas.get(param_id, 0.0) + contribution
 
     # Final clamp on aggregated deltas — overlapping axes can stack
-    # (e.g. both joy+surprise want PARAM_BROW up). Cap at ±0.5 per
-    # parameter to prevent the face going off-model.
-    return {pid: max(-0.5, min(0.5, v)) for pid, v in deltas.items()}
+    # (e.g. both joy+surprise want PARAM_BROW up). Cap at ±0.8 per
+    # parameter so that simultaneous-axis stacking stays visible while
+    # still preventing the face going fully off-model.
+    return {pid: max(-0.8, min(0.8, v)) for pid, v in deltas.items()}
 
 
 def build_expression_message(
     sentence: str,
     valence: Optional[float] = None,
-    duration_ms: int = 600,
+    duration_ms: Optional[int] = None,
 ) -> Dict:
     """Build the full WebSocket message the frontend will receive.
 
-    Returns a dict ready for json.dumps(); the agent layer wraps it.
+    If duration_ms is None, we estimate from sentence length — roughly
+    80ms per character, clamped to [600ms, 4000ms]. This keeps the
+    envelope active for long-form content (sea shanty verses,
+    storytelling) where the old fixed 600ms faded out 3 seconds
+    before TTS finished. Short exclamations still get a short window.
     """
     blend = infer(sentence)
     deltas = blend_to_param_deltas(blend, valence=valence)
+    if duration_ms is None:
+        est = 80 * max(1, len(sentence or ""))
+        duration_ms = max(600, min(4000, est))
     return {
         "type": "expression_blend",
         "blend": blend.to_dict(),
