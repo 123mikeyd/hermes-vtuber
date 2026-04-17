@@ -1,0 +1,27 @@
+# Phase 4 frontend integration patch
+#
+# Apply to: ${OLLV}/frontend/index.html
+# Apply via:
+#   cd ${OLLV}/frontend && patch -p1 < /path/to/patches/frontend-mood-sidecar.patch
+#
+# Plus copy the sidecar into the same directory:
+#   cp /path/to/sidecars/mood-sidecar.js ${OLLV}/frontend/mood-sidecar.js
+#
+# Without this patch, mood-tagged idle motion swapping does not happen
+# in the frontend. The server still emits mood_update messages — this
+# patch is what makes the frontend act on them.
+diff --git a/index.html b/index.html
+index abcd123..efgh456 100644
+--- a/index.html
++++ b/index.html
+@@ -3,6 +3,10 @@
+   <head>
+     <meta charset="UTF-8" />
+     <title>Open-LLM-Vtuber</title>
++    <!-- Hermes Phase 4: load sidecar BEFORE the main bundle so the
++         WebSocket intercept is installed by the time React opens its
++         connection. Sidecar drives mood-tagged idle motion selection. -->
++    <script src="./mood-sidecar.js"></script>
+     <script type="module" crossorigin src="./assets/main-nu7uwxNJ.js"></script>
+     <link rel="stylesheet" crossorigin href="./assets/main-QEkl09-0.css">
+   </head>
