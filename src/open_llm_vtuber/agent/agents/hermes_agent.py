@@ -501,6 +501,17 @@ class HermesAgent(AgentInterface):
             # the composer reads on the NEXT new session to remember context.
             self._session_memory.add_turn("user", user_text)
             self._session_memory.add_turn("assistant", full_response)
+
+            # Phase 3: classify the exchange and nudge the mood vector.
+            # Only runs when an Identity is attached (so we have a baseline).
+            # Heuristic classifier — microseconds, no extra subprocess.
+            if self._identity is not None:
+                self._session_memory.ensure_mood(self._identity.mood_baseline)
+                from ...persona.mood_classifier import classify as _mood_classify
+                delta = _mood_classify(user_text, full_response)
+                self._session_memory.mood.apply_delta(delta)
+                self._session_memory.save()  # persist updated mood
+
             if self._session_memory.needs_summary():
                 # Fire-and-forget: schedule summarization but don't await.
                 # The refreshed summary will be in place for any NEW session

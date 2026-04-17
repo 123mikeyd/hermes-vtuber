@@ -20,6 +20,8 @@ Part of: .hermes/plans/2026-04-17_personality-evolution.md
 from .identity import Identity, MoodBaseline, load_identity
 from .session_memory import SessionMemory, Turn
 from .composer import PersonaComposer, ComposedPrompt
+from .mood import MoodState, MoodDelta
+from .mood_classifier import classify as mood_classify
 
 __all__ = [
     "Identity",
@@ -29,4 +31,8 @@ __all__ = [
     "Turn",
     "PersonaComposer",
     "ComposedPrompt",
+    # Phase 3
+    "MoodState",
+    "MoodDelta",
+    "mood_classify",
 ]

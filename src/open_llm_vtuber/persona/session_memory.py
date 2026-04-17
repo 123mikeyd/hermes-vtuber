@@ -71,6 +71,10 @@ class SessionMemory:
     Stores recent turns raw, compresses older ones into a rolling summary.
     Persists itself to a JSON file on disk so server restarts don't wipe
     state mid-conversation.
+
+    Phase 3: also holds the MoodState so that mood persists across
+    restarts through the same JSON file. Created lazily via
+    ensure_mood() so existing JSON files load without surprise.
     """
 
     # Full list of turns ever added to this memory, in order. The list
@@ -87,6 +91,10 @@ class SessionMemory:
     # Monotonically increasing counter of turns added since last summary.
     # Separate from len(turns) so we can trigger re-summarize on delta.
     turns_since_summary: int = 0
+
+    # Phase 3 — mood state. Optional because existing saves predate it.
+    # Use ensure_mood(baseline) to lazily create.
+    mood: Optional["MoodState"] = None
 
     # Optional path where this memory persists to. Set via
     # attach_file() or constructor. When None, save()/load() no-op.
@@ -179,6 +187,9 @@ class SessionMemory:
             "rolling_summary": self.rolling_summary,
             "turns_since_summary": self.turns_since_summary,
         }
+        # Phase 3 — persist mood alongside turns in the same file
+        if self.mood is not None:
+            payload["mood"] = self.mood.to_dict()
         with tmp.open("w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
         tmp.replace(self.persist_path)
@@ -197,17 +208,46 @@ class SessionMemory:
             return mem
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
+        # Phase 3: lazy-load mood if present. Imported locally to avoid
+        # a circular import at module-top.
+        mood_obj: Optional["MoodState"] = None
+        if "mood" in data and data["mood"]:
+            from .mood import MoodState  # noqa: E402
+            mood_obj = MoodState.from_dict(data["mood"])
         mem = cls(
             turns=[Turn.from_dict(t) for t in data.get("turns", [])],
             rolling_summary=str(data.get("rolling_summary", "")),
             turns_since_summary=int(data.get("turns_since_summary", 0)),
+            mood=mood_obj,
         )
         mem.attach_file(path)
         logger.info(
             f"SessionMemory loaded from {path}: "
-            f"{len(mem.turns)} turns, summary={len(mem.rolling_summary)} chars"
+            f"{len(mem.turns)} turns, summary={len(mem.rolling_summary)} chars, "
+            f"mood={'yes' if mem.mood else 'no'}"
         )
         return mem
+
+    def ensure_mood(self, baseline: "MoodBaseline") -> "MoodState":
+        """Get or create the MoodState. Lazily imports MoodState to
+        avoid circular imports at module-top.
+
+        Call this from the agent once per session, passing the
+        character's identity.mood_baseline. Safe to call every turn —
+        it only constructs on first call.
+        """
+        if self.mood is None:
+            from .mood import MoodState
+            # Use `replace`-style: construct a new MoodState whose
+            # baseline matches the identity's, and whose current vector
+            # starts AT baseline (MoodState.__post_init__ handles that).
+            self.mood = MoodState(baseline=baseline)
+            logger.info(
+                f"SessionMemory.ensure_mood: created MoodState at baseline "
+                f"v={baseline.valence:+.2f} a={baseline.arousal:+.2f} "
+                f"s={baseline.social:+.2f} f={baseline.focus:+.2f}"
+            )
+        return self.mood
 
     # --- Introspection (for composer) ---
 

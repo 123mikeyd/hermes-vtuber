@@ -85,10 +85,12 @@ class PersonaComposer:
           2. Biography chunks (tier 2, optional, Phase 2b)
           3. Summary of older turns (tier 3, from prior sessions)
           4. Recent turns window (tier 3, from this or prior sessions)
+          5. Mood line (Phase 3) — current emotional state in plain English
 
         If total token estimate exceeds budget, sections 3 and 4 are
         truncated from the OLDEST end — we keep the character intact
-        and trim the memory window first.
+        and trim the memory window first. The mood line is ALWAYS kept
+        (it's one sentence and the payoff is huge).
         """
 
         sections: List[str] = []
@@ -136,20 +138,32 @@ class PersonaComposer:
                     + capped_recent
                 )
 
+        # 5. Mood line (Phase 3). Always append when mood exists —
+        # one sentence, high leverage. We place it LAST so it's the
+        # final note the LLM reads before generating.
+        mood_tokens = 0
+        if session_memory is not None and session_memory.mood is not None:
+            session_memory.mood.decay_to_now()
+            mood_line = session_memory.mood.describe()
+            sections.append("## Current State\n" + mood_line)
+            mood_tokens = self._tok(mood_line)
+
         composed = "\n\n---\n\n".join(sections)
         total_tokens = self._tok(composed)
 
         # Final safety net — if we are still over the total budget,
-        # drop tier 3 recent (keeping identity + summary). This almost
-        # never fires because per-tier caps handle it, but defense-in-depth.
+        # drop tier 3 recent (keeping identity + summary + mood). This
+        # almost never fires because per-tier caps handle it, but
+        # defense-in-depth.
         if total_tokens > self.total_budget_tokens and tier3_recent_tokens > 0:
             logger.warning(
                 f"PersonaComposer total {total_tokens} > budget "
                 f"{self.total_budget_tokens}; dropping recent turns entirely"
             )
-            # Re-assemble without the recent section
-            sections = sections[:-1] if tier3_recent_tokens > 0 else sections
-            composed = "\n\n---\n\n".join(sections)
+            # Re-assemble without the recent section. Recent lives at a
+            # known position (after summary, before mood) — find and drop.
+            new_sections = [s for s in sections if not s.startswith("## Recent Conversation")]
+            composed = "\n\n---\n\n".join(new_sections)
             total_tokens = self._tok(composed)
             tier3_recent_tokens = 0
             truncated = True
@@ -167,7 +181,8 @@ class PersonaComposer:
         logger.debug(
             f"Composed prompt: {total_tokens}/{self.total_budget_tokens} tokens "
             f"(tier1={tier1_tokens}, summary={tier3_summary_tokens}, "
-            f"recent={tier3_recent_tokens}, truncated={truncated})"
+            f"recent={tier3_recent_tokens}, mood={mood_tokens}, "
+            f"truncated={truncated})"
         )
         return result
 
