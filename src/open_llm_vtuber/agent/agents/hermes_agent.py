@@ -483,6 +483,39 @@ class HermesAgent(AgentInterface):
 
             logger.info(f"HermesAgent received: {user_text[:100]}...")
 
+            # Phase 4: PRE-TURN mood classification. Read the user's
+            # message alone and nudge mood BEFORE building the prompt,
+            # so hermes sees the just-updated mood in its system block
+            # on the SAME turn. The character "reads the room" before
+            # responding.
+            #
+            # We pass an empty assistant_text to classify() — the user's
+            # text is the only signal available pre-turn. Post-turn we
+            # reclassify with both sides, catching any affect shift the
+            # assistant's own reply introduced.
+            if self._identity is not None:
+                self._session_memory.ensure_mood(self._identity.mood_baseline)
+                from ...persona.mood_classifier import classify as _mood_classify
+                pre_delta = _mood_classify(user_text, "")
+                if (abs(pre_delta.valence) + abs(pre_delta.energy)
+                        + abs(pre_delta.social) + abs(pre_delta.focus)) > 0.0:
+                    # Apply at HALF weight pre-turn so the full exchange
+                    # (applied post-turn) still has room to move the
+                    # vector. Otherwise strong pre-turn deltas would
+                    # saturate the axis and the post-turn delta would
+                    # be a no-op.
+                    from ...persona.mood import MoodDelta as _MoodDelta
+                    halved = _MoodDelta(
+                        valence=pre_delta.valence * 0.5,
+                        energy=pre_delta.energy * 0.5,
+                        social=pre_delta.social * 0.5,
+                        focus=pre_delta.focus * 0.5,
+                        reason=f"pre-turn: {pre_delta.reason}",
+                    )
+                    self._session_memory.mood.apply_delta(halved)
+                    # Touch the quadrant so any transition gets logged now
+                    self._session_memory.mood.quadrant()
+
             # Build prompt (differs for first turn vs resume)
             prompt = self._build_prompt(user_text)
 
@@ -510,7 +543,13 @@ class HermesAgent(AgentInterface):
                 from ...persona.mood_classifier import classify as _mood_classify
                 delta = _mood_classify(user_text, full_response)
                 self._session_memory.mood.apply_delta(delta)
-                self._session_memory.save()  # persist updated mood
+                # Phase 4: touch quadrant() so hysteresis evaluates and
+                # any transition gets logged and persisted alongside
+                # the vector. Without this, current_quadrant is stale
+                # on save and the mood_update WebSocket message picks
+                # up the OLD quadrant label.
+                self._session_memory.mood.quadrant()
+                self._session_memory.save()  # persist updated mood + quadrant
 
             if self._session_memory.needs_summary():
                 # Fire-and-forget: schedule summarization but don't await.

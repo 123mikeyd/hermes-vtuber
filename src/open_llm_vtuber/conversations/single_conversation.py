@@ -159,6 +159,17 @@ async def process_single_conversation(
             )
             logger.info(f"AI response: {full_response}")
 
+        # Phase 4 — emit a mood_update WebSocket message so the frontend
+        # can switch its idle motion pool to match the character's
+        # current quadrant. Only fires when the agent is a HermesAgent
+        # with persona v2 active (i.e., has a SessionMemory carrying a
+        # MoodState). Silently no-ops for other agents.
+        try:
+            await _maybe_emit_mood_update(context, websocket_send)
+        except Exception as _mood_err:
+            # Best-effort; never break a turn over a cosmetic signal.
+            logger.warning(f"mood_update emit failed (non-fatal): {_mood_err}")
+
         return full_response  # Return accumulated full_response
 
     except asyncio.CancelledError:
@@ -172,3 +183,69 @@ async def process_single_conversation(
         raise
     finally:
         cleanup_conversation(tts_manager, session_emoji)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — mood_update emission
+# ---------------------------------------------------------------------------
+
+async def _maybe_emit_mood_update(
+    context: ServiceContext,
+    websocket_send: WebSocketSend,
+) -> None:
+    """If the agent carries a persona v2 mood vector, push a mood_update
+    message to the frontend with the current quadrant, vector snapshot,
+    and the pool of motion filenames the frontend should pick idles from.
+
+    Silently no-ops when the agent lacks persona v2 (e.g., basic_memory
+    or any non-hermes agent) or when mood hasn't been initialized yet.
+    """
+    agent = getattr(context, "agent_engine", None)
+    if agent is None:
+        return
+
+    # SessionMemory is private on the agent, but we check with getattr
+    # so we don't fail if the agent class doesn't have one.
+    session_memory = getattr(agent, "_session_memory", None)
+    if session_memory is None:
+        return
+    mood = getattr(session_memory, "mood", None)
+    if mood is None:
+        return
+
+    # Snapshot the mood after any pending decay
+    mood.decay_to_now()
+    snapshot = mood.snapshot()
+    quadrant = snapshot["quadrant"]
+
+    # Resolve the motion pool for this character's loaded Live2D model
+    from ..persona.pool_map import resolve_pool
+    from pathlib import Path as _Path
+    model_name = getattr(context.character_config, "live2d_model_name", None)
+    if not model_name:
+        return
+    # Build a candidate model_dir so resolve_pool can auto-build if
+    # no PoolMap is registered for this model
+    model_dir = (
+        _Path("live2d-models") / model_name / "runtime"
+    )
+    pool_map = resolve_pool(model_name, model_dir=model_dir)
+    pool = pool_map.get(quadrant)
+
+    message = {
+        "type": "mood_update",
+        "quadrant": quadrant,
+        "pool": pool,                      # list of motion filenames
+        "pools": pool_map.as_dict(),       # full mapping (frontend may cache)
+        "snapshot": snapshot,              # v / e / s / f / description
+        "model_name": model_name,
+    }
+
+    try:
+        await websocket_send(json.dumps(message))
+        logger.debug(
+            f"mood_update sent: quadrant={quadrant}, "
+            f"pool={len(pool)} motions, model={model_name}"
+        )
+    except Exception as e:
+        logger.warning(f"mood_update websocket send failed: {e}")

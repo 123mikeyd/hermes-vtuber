@@ -22,6 +22,14 @@ from .session_memory import SessionMemory, Turn
 from .composer import PersonaComposer, ComposedPrompt
 from .mood import MoodState, MoodDelta
 from .mood_classifier import classify as mood_classify
+from .pool_map import (
+    PoolMap,
+    POOL_KEYS,
+    register_pool,
+    get_pool_for_model,
+    resolve_pool,
+    HERMES_DARK_POOL,
+)
 
 __all__ = [
     "Identity",
@@ -35,4 +43,11 @@ __all__ = [
     "MoodState",
     "MoodDelta",
     "mood_classify",
+    # Phase 4
+    "PoolMap",
+    "POOL_KEYS",
+    "register_pool",
+    "get_pool_for_model",
+    "resolve_pool",
+    "HERMES_DARK_POOL",
 ]
