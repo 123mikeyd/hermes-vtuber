@@ -11,142 +11,307 @@
     color: #d8d8d8;
     margin: 0;
     padding: 20px;
+    max-width: 1400px;
   }
-  h1 { color: #7af; margin: 0 0 6px 0; font-size: 22px; }
-  h2 { color: #7af; margin: 20px 0 8px 0; font-size: 16px;
-       border-bottom: 1px solid #333; padding-bottom: 4px; }
-  p.note { color: #888; font-size: 13px; margin: 6px 0; }
+  h1 { color: #7af; margin: 0 0 8px 0; font-size: 24px; }
+  h2 { color: #7af; margin: 24px 0 10px 0; font-size: 17px;
+       border-bottom: 1px solid #333; padding-bottom: 6px; }
+  h3 { color: #ccc; margin: 14px 0 6px 0; font-size: 14px; }
+  .intro { color: #aaa; font-size: 14px; margin: 10px 0 20px 0;
+           border-left: 3px solid #7af; padding: 10px 14px;
+           background: #111; }
+  .step {
+    background: #0f0f0f;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+  }
+  .step.done { border-color: #2a5; }
+  .step-num {
+    display: inline-block;
+    background: #223;
+    color: #7af;
+    border-radius: 50%;
+    width: 26px; height: 26px;
+    line-height: 26px;
+    text-align: center;
+    font-weight: bold;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  .step.done .step-num { background: #2a5; color: #fff; }
+  .step-title { display: inline-block; font-size: 15px; color: #ccc; }
+  .step-body { margin-top: 10px; color: #aaa; font-size: 13px; }
+  .step-body p { margin: 6px 0; }
+  .step-body code { background: #222; padding: 2px 5px; color: #fea; }
   .row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
   .pane {
-    background: #111;
-    border: 1px solid #333;
+    background: #0f0f0f;
+    border: 1px solid #2a2a2a;
     border-radius: 4px;
-    padding: 14px;
+    padding: 16px;
+    flex: 1;
     min-width: 380px;
   }
   button {
     background: #223;
     color: #7af;
     border: 1px solid #445;
-    padding: 8px 14px;
+    padding: 10px 16px;
     font-family: 'Courier New', Courier, monospace;
     font-size: 13px;
     cursor: pointer;
-    margin: 2px 4px 2px 0;
+    margin: 4px 6px 4px 0;
+    border-radius: 2px;
   }
   button:hover { background: #334; color: #fff; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
-  label { display: block; margin: 10px 0 4px 0; font-size: 13px; color: #aaa; }
-  input[type=range] { width: 220px; }
-  input[type=number] { width: 60px; background: #222; color: #d8d8d8;
-                       border: 1px solid #444; padding: 4px; }
-  .status { font-size: 12px; color: #888; margin-top: 8px; min-height: 16px; }
-  .status.ok { color: #8f8; }
-  .status.err { color: #f88; }
-  #modelCanvas { background: #181818; border: 1px solid #333; display: block; }
-  #avatarCanvas { background: #181818; border: 1px solid #333; display: block; }
-  .atlas-stack { display: flex; flex-direction: column; gap: 10px; }
+  button.primary { background: #245; color: #afd; border-color: #478; }
+  button.primary:hover { background: #356; color: #fff; }
+  label { display: inline-block; margin: 6px 8px 6px 0; font-size: 13px; color: #aaa; }
+  input[type=range] { width: 180px; vertical-align: middle; }
+  input[type=number] { width: 70px; background: #222; color: #d8d8d8;
+                       border: 1px solid #444; padding: 5px; }
+  input[type=checkbox] { vertical-align: middle; }
+  .status {
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 2px;
+    min-height: 16px;
+    margin: 10px 0;
+    background: #181818;
+    color: #888;
+    border-left: 3px solid #444;
+  }
+  .status.ok { color: #afa; border-left-color: #2a5; }
+  .status.err { color: #faa; border-left-color: #a33; background: #201515; }
+  .status.info { color: #fea; border-left-color: #a85; }
+  #modelCanvas, #avatarCanvas {
+    background: #181818;
+    border: 1px solid #333;
+    display: block;
+    margin-top: 8px;
+  }
+  .atlas-stack { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
   .atlas-item {
     position: relative;
     background: #000;
     border: 1px solid #333;
+    display: inline-block;
   }
   .atlas-item canvas {
     display: block;
-    width: 512px;   /* scaled down from 1024 for screen */
+    width: 512px;
     height: 512px;
   }
-  .atlas-item .label {
+  .atlas-item .tex-label {
     position: absolute;
-    top: 4px; left: 4px;
-    background: rgba(0,0,0,0.8);
+    top: 6px; left: 6px;
+    background: rgba(0,0,0,0.85);
     color: #7af;
-    padding: 2px 6px;
+    padding: 4px 8px;
     font-size: 12px;
     pointer-events: none;
+    border: 1px solid #234;
+  }
+  .legend-wrap {
+    margin-top: 10px;
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid #333;
+    padding: 8px;
+    background: #0a0a0a;
   }
   .legend {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 2px;
     font-size: 11px;
-    margin-top: 8px;
-    max-height: 200px;
-    overflow-y: auto;
   }
-  .legend div { padding: 2px 4px; cursor: pointer; }
+  .legend div {
+    padding: 3px 6px;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 2px;
+  }
   .legend div:hover { background: #223; }
-  .legend div.hidden { opacity: 0.3; }
+  .legend div.hidden { opacity: 0.35; }
   .legend .swatch {
     display: inline-block; width: 10px; height: 10px;
     margin-right: 6px; vertical-align: middle;
     border: 1px solid #000;
   }
-  .controls label { display: inline-block; margin-right: 10px; }
-  .meta { font-size: 11px; color: #666; margin-top: 6px; }
+  .controls-row label { margin-right: 14px; }
+  .kbd {
+    display: inline-block;
+    background: #222; color: #fea;
+    border: 1px solid #444;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 11px;
+  }
 </style>
 </head>
 <body>
 
-<h1>Hermes Atlas & Avatar Tool</h1>
-<p class="note">Single-file tool for inspecting the hermes_dark Live2D model's
-texture atlas and generating an avatar PNG cropped from the live render.
-Open this in the same browser you use for the VTuber (localhost:12393) so the
-model files are already served. No server of our own required — it's
-all client-side using the Cubism SDK + pixi-live2d-display.</p>
-
-<div class="row">
-
-  <!-- Pane 1: live model render + avatar extractor -->
-  <div class="pane">
-    <h2>Live model render</h2>
-    <canvas id="modelCanvas" width="512" height="512"></canvas>
-    <div class="controls" style="margin-top: 8px;">
-      <label>zoom <input id="zoom" type="range" min="0.5" max="3.0" step="0.05" value="1.8"></label>
-      <label>x    <input id="offX" type="range" min="-256" max="256" step="1" value="0"></label>
-      <label>y    <input id="offY" type="range" min="-256" max="256" step="1" value="0"></label>
-    </div>
-
-    <h2>Generate avatar PNG</h2>
-    <p class="note">Cropped square PNG ready to drop in
-    <code>/home/mikeyd/Open-LLM-VTuber/avatars/</code>.
-    Recommended size: 512. Click "Render avatar" then
-    "Download" to save.</p>
-    <div class="controls">
-      <label>size <input id="avatarSize" type="number" min="128" max="1024" step="64" value="512"></label>
-      <label>face crop
-        <input id="faceCrop" type="checkbox" checked>
-      </label>
-    </div>
-    <button id="renderAvatar">Render avatar</button>
-    <button id="downloadAvatar" disabled>Download nova.png</button>
-    <div id="avatarStatus" class="status"></div>
-    <div style="margin-top: 10px;">
-      <canvas id="avatarCanvas" width="512" height="512"></canvas>
-    </div>
-  </div>
-
-  <!-- Pane 2: atlas overlay -->
-  <div class="pane">
-    <h2>Atlas overlay</h2>
-    <p class="note">Each ArtMesh's UV bounds are drawn on top of the
-    texture PNG it lives in. Hover a legend entry to isolate one mesh;
-    click to toggle.</p>
-    <div class="controls">
-      <label>alpha <input id="overlayAlpha" type="range" min="0" max="1" step="0.05" value="0.5"></label>
-      <label>labels <input id="showLabels" type="checkbox" checked></label>
-      <label>stroke only <input id="strokeOnly" type="checkbox"></label>
-    </div>
-    <button id="buildOverlay">Build atlas overlay</button>
-    <div id="overlayStatus" class="status"></div>
-    <div id="atlasStack" class="atlas-stack"></div>
-    <div id="legend" class="legend"></div>
-  </div>
-
+<h1>Hermes Atlas &amp; Avatar Tool</h1>
+<div class="intro">
+  <strong>What this is:</strong>
+  two utilities for editing Nova's textures and generating her chat avatar.<br>
+  <strong>Why you need it:</strong>
+  (1) the texture PNGs are a grid of disassembled parts — ears, blush,
+  mouth, each hair strand — and this tool tells you
+  <em>which pixels belong to which feature</em>. (2) The current
+  chat-box avatar needs to be Nova's actual face, not a placeholder.
 </div>
 
-<!-- Cubism runtime -->
-<script src="/frontend/libs/live2dcubismcore.min.js"></script>
+<!-- =============== AVATAR GENERATOR =============== -->
+<h2>Part 1 — Generate Nova's chat avatar</h2>
+
+<div id="step1" class="step">
+  <span class="step-num">1</span>
+  <span class="step-title">Wait for the model to load.</span>
+  <div class="step-body">
+    <p>It fetches from <code>/live2d-models/hermes_dark/runtime/…</code>
+    and takes a few seconds. Status will say "model loaded" when ready.</p>
+  </div>
+</div>
+
+<div id="step2" class="step">
+  <span class="step-num">2</span>
+  <span class="step-title">Frame the face in the preview.</span>
+  <div class="step-body">
+    <p>Use the sliders below the canvas to adjust
+    <strong>zoom</strong>, <strong>x</strong>, <strong>y</strong>
+    until Nova's face is nicely centered. The preview updates live —
+    what you see is what you'll get in the avatar.</p>
+  </div>
+</div>
+
+<div id="step3" class="step">
+  <span class="step-num">3</span>
+  <span class="step-title">Click "Render avatar" → "Download".</span>
+  <div class="step-body">
+    <p><strong>Render avatar</strong> snapshots the current framing
+    to a square PNG. <strong>Download</strong> saves it as
+    <code>nova.png</code> into your Downloads folder.</p>
+    <p>Then move it:
+      <code>mv ~/Downloads/nova.png ~/Open-LLM-VTuber/avatars/nova.png</code><br>
+    And tell me to update <code>conf.yaml</code>, or do it yourself — change
+    both <code>avatar:</code> lines from <code>nova_stopgap.png</code> to
+    <code>nova.png</code>.</p>
+  </div>
+</div>
+
+<div class="row">
+  <div class="pane">
+    <h3>Live model preview</h3>
+    <canvas id="modelCanvas" width="480" height="480"></canvas>
+    <div id="modelStatus" class="status info">initializing…</div>
+
+    <div class="controls-row">
+      <label>zoom
+        <input id="zoom" type="range" min="0.5" max="4.0" step="0.05" value="2.2">
+        <span id="zoomVal">2.20</span>
+      </label><br>
+      <label>x
+        <input id="offX" type="range" min="-240" max="240" step="1" value="0">
+        <span id="offXVal">0</span>
+      </label><br>
+      <label>y
+        <input id="offY" type="range" min="-240" max="240" step="1" value="-40">
+        <span id="offYVal">-40</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="pane">
+    <h3>Avatar output</h3>
+    <canvas id="avatarCanvas" width="480" height="480"></canvas>
+    <div id="avatarStatus" class="status">not rendered yet</div>
+
+    <div class="controls-row">
+      <label>output size
+        <input id="avatarSize" type="number" min="128" max="1024" step="64" value="512">
+      </label>
+    </div>
+    <button id="renderAvatar" class="primary">Render avatar</button>
+    <button id="downloadAvatar" disabled>Download nova.png</button>
+  </div>
+</div>
+
+<!-- =============== ATLAS OVERLAY =============== -->
+<h2>Part 2 — Atlas overlay (see which pixels are which feature)</h2>
+
+<div class="step">
+  <span class="step-num">1</span>
+  <span class="step-title">Click "Build atlas overlay".</span>
+  <div class="step-body">
+    <p>This fetches all 5 texture PNGs, reads the ArtMesh UV data
+    from the loaded model, and paints each mesh's pixel region on top
+    of the source texture. Takes a couple seconds.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-num">2</span>
+  <span class="step-title">Read the atlas maps.</span>
+  <div class="step-body">
+    <p>Each texture becomes an annotated map:
+    <strong>colored overlays</strong> show where each ArtMesh's pixels live.
+    <strong>Labels on top</strong> name the mesh (e.g.
+    <code>ArtMesh_Hair_Front</code>, <code>ArtMesh_Blush_L</code>).</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-num">3</span>
+  <span class="step-title">Isolate one feature in the legend below.</span>
+  <div class="step-body">
+    <p>The legend lists every mesh by name. <strong>Click a name</strong>
+    to hide its overlay — makes it easy to isolate just the ears, or
+    just the blush, or just a specific hair strand.
+    <strong>"Hide all"</strong> then click-to-enable lets you pick one
+    mesh at a time.</p>
+    <p>Use <kbd class="kbd">alpha</kbd> slider for visibility balance,
+    <kbd class="kbd">stroke only</kbd> for just outlines (so the texture
+    shows through unobscured), <kbd class="kbd">labels</kbd> to
+    toggle text.</p>
+  </div>
+</div>
+
+<div class="pane" style="width: 100%; max-width: none;">
+  <div class="controls-row">
+    <button id="buildOverlay" class="primary">Build atlas overlay</button>
+    <button id="legendAll">Show all</button>
+    <button id="legendNone">Hide all</button>
+    <label>alpha
+      <input id="overlayAlpha" type="range" min="0" max="1" step="0.05" value="0.5">
+      <span id="overlayAlphaVal">0.50</span>
+    </label>
+    <label>labels
+      <input id="showLabels" type="checkbox" checked>
+    </label>
+    <label>stroke only
+      <input id="strokeOnly" type="checkbox">
+    </label>
+  </div>
+  <div id="overlayStatus" class="status">not built yet — click "Build atlas overlay"</div>
+
+  <div id="atlasStack" class="atlas-stack"></div>
+  <div class="legend-wrap" id="legendWrap" style="display:none">
+    <div style="font-size:12px; color:#888; margin-bottom:6px;">
+      Click any mesh name to toggle its overlay.
+    </div>
+    <div id="legend" class="legend"></div>
+  </div>
+</div>
+
+<!-- ================================================ -->
+
+<!-- Cubism runtime (served at /libs/ not /frontend/libs/ from the root) -->
+<script src="/libs/live2dcubismcore.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
 
@@ -155,31 +320,57 @@ all client-side using the Cubism SDK + pixi-live2d-display.</p>
   'use strict';
 
   const MODEL_URL = '/live2d-models/hermes_dark/runtime/hermes_dark.model3.json';
-  const TEX_BASE = '/live2d-models/hermes_dark/runtime/hermes_dark.1024';
-  const log = (...a) => console.log('%c[atlas-tool]', 'color:#7af', ...a);
+  const TEX_BASE  = '/live2d-models/hermes_dark/runtime';
+
+  const log  = (...a) => console.log('%c[atlas-tool]', 'color:#7af', ...a);
   const warn = (...a) => console.warn('%c[atlas-tool]', 'color:#fa7', ...a);
 
-  // ------------- Live model render -------------
+  function setStatus(id, cls, msg) {
+    const el = document.getElementById(id);
+    el.className = 'status ' + cls;
+    el.textContent = msg;
+  }
+  function markStepDone(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('done');
+  }
 
+  // ---------- Pre-flight: Cubism core loaded? ----------
+  if (typeof Live2DCubismCore === 'undefined') {
+    setStatus('modelStatus', 'err',
+      'FAILED: Live2DCubismCore not available. ' +
+      'The script at /libs/live2dcubismcore.min.js did not load. ' +
+      'Check that the server is running and the libs dir is mounted.');
+    return;
+  }
+  if (!window.PIXI || !PIXI.live2d) {
+    setStatus('modelStatus', 'err',
+      'FAILED: PIXI or pixi-live2d-display not loaded. Check CDN access.');
+    return;
+  }
+
+  // ---------- PIXI app for the live preview ----------
   const app = new PIXI.Application({
     view: document.getElementById('modelCanvas'),
-    width: 512, height: 512,
+    width: 480, height: 480,
     backgroundColor: 0x181818,
     antialias: true,
     autoStart: true,
   });
 
   let model = null;
+
   function layoutModel() {
     if (!model) return;
     const z = parseFloat(document.getElementById('zoom').value);
     const ox = parseFloat(document.getElementById('offX').value);
     const oy = parseFloat(document.getElementById('offY').value);
-    // Fit: the stock model is tall; scale so its natural size ~ canvas
-    const base = Math.min(
-      app.screen.width / (model.internalModel.width || 1024),
-      app.screen.height / (model.internalModel.height || 1024)
-    ) * 1.4;
+    document.getElementById('zoomVal').textContent = z.toFixed(2);
+    document.getElementById('offXVal').textContent = ox;
+    document.getElementById('offYVal').textContent = oy;
+    const mw = model.internalModel.width  || 1024;
+    const mh = model.internalModel.height || 1024;
+    const base = Math.min(app.screen.width / mw, app.screen.height / mh);
     model.scale.set(base * z);
     model.anchor.set(0.5, 0.5);
     model.position.set(app.screen.width / 2 + ox,
@@ -189,65 +380,85 @@ all client-side using the Cubism SDK + pixi-live2d-display.</p>
     document.getElementById(id).addEventListener('input', layoutModel);
   });
 
+  // ---------- Load the model ----------
+  setStatus('modelStatus', 'info', 'loading model…');
   try {
-    log('loading model:', MODEL_URL);
     model = await PIXI.live2d.Live2DModel.from(MODEL_URL, {
       autoInteract: false, autoUpdate: true,
     });
     app.stage.addChild(model);
     layoutModel();
     log('model loaded:', model);
-    window.__atlasTool = { model, app };  // debug handle
+    const drawCount = model.internalModel.coreModel._model?.drawables?.count
+                   || '?';
+    setStatus('modelStatus', 'ok',
+      `model loaded — ${drawCount} drawables ready. ` +
+      `Adjust zoom/x/y to frame Nova's face.`);
+    markStepDone('step1');
+    markStepDone('step2');
+    window.__atlasTool = { model, app };
   } catch (e) {
+    setStatus('modelStatus', 'err',
+      `model load FAILED: ${e.message || e}. Check DevTools Console.`);
     warn('model load failed:', e);
+    return;
   }
 
-  // ------------- Avatar generator -------------
-
+  // ---------- Render avatar ----------
   document.getElementById('renderAvatar').addEventListener('click', () => {
-    if (!model) { setStatus('avatarStatus','err','model not loaded'); return; }
+    if (!model) {
+      setStatus('avatarStatus','err','no model loaded'); return;
+    }
     const size = parseInt(document.getElementById('avatarSize').value) || 512;
-    const faceCrop = document.getElementById('faceCrop').checked;
+    setStatus('avatarStatus', 'info', `rendering ${size}x${size}…`);
 
-    // Render the model into an offscreen PIXI renderer at size x size.
-    // We use app.renderer.extract to pull a PNG-compatible Image.
+    // Render the current preview framing into a square RT of the chosen size.
+    // We'll use the same transform as the preview, scaled from 480->size.
     const rt = PIXI.RenderTexture.create({ width: size, height: size });
 
-    // Put the model in a temp container so we can scale/center without
-    // touching our on-screen preview.
+    // Snapshot current transform
+    const prevScale = model.scale.x;
+    const prevX = model.position.x;
+    const prevY = model.position.y;
+
+    // Scale the preview framing up to the output size
+    const k = size / app.screen.width;  // same aspect (both square)
+    model.scale.set(prevScale * k);
+    // Preserve the offset (currently measured from 240 = center of 480)
+    const ox = parseFloat(document.getElementById('offX').value);
+    const oy = parseFloat(document.getElementById('offY').value);
+    model.position.set(size / 2 + ox * k, size / 2 + oy * k);
+
+    // Temporarily put model in a fresh container for the RT render
+    const saved = model.parent;
     const tmp = new PIXI.Container();
     tmp.addChild(model);
-    // Compute fit scale: if faceCrop, zoom into upper 40% of model;
-    // otherwise, fit the whole model.
-    const mw = model.internalModel.width || 1024;
-    const mh = model.internalModel.height || 1024;
-    let scale = Math.min(size / mw, size / mh) * (faceCrop ? 2.4 : 1.1);
-    model.scale.set(scale);
-    model.anchor.set(0.5, 0.5);
-    model.position.set(size / 2, faceCrop ? size * 0.48 : size / 2);
 
-    // Render once, pull the pixel data
     app.renderer.render(tmp, { renderTexture: rt });
-
-    // Extract to a canvas we can serialize to PNG blob
     const canvas = app.renderer.extract.canvas(rt);
+
     const out = document.getElementById('avatarCanvas');
     out.width = size; out.height = size;
+    // Display at 480 so the pane doesn't blow up
+    out.style.width = '480px';
+    out.style.height = '480px';
     const ctx = out.getContext('2d');
     ctx.clearRect(0, 0, size, size);
     ctx.drawImage(canvas, 0, 0);
 
-    // Put model BACK in the live preview stage
-    app.stage.addChild(model);
-    layoutModel();
+    // Restore the model to the live preview
+    saved.addChild(model);
+    model.scale.set(prevScale);
+    model.position.set(prevX, prevY);
 
-    // Stash for download
-    window.__avatarBlob = null;
+    // Make downloadable
     out.toBlob((blob) => {
       window.__avatarBlob = blob;
       document.getElementById('downloadAvatar').disabled = false;
-      setStatus('avatarStatus','ok',
-        `rendered ${size}×${size}, ${(blob.size/1024).toFixed(1)} KB`);
+      setStatus('avatarStatus', 'ok',
+        `rendered ${size}×${size}, ${(blob.size/1024).toFixed(1)} KB. ` +
+        `Now click "Download nova.png".`);
+      markStepDone('step3');
     }, 'image/png');
   });
 
@@ -260,108 +471,102 @@ all client-side using the Cubism SDK + pixi-live2d-display.</p>
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
 
-  // ------------- Atlas overlay -------------
-
-  function setStatus(id, cls, msg) {
-    const el = document.getElementById(id);
-    el.className = 'status ' + cls;
-    el.textContent = msg;
-  }
-
+  // ---------- Atlas overlay ----------
   function colorFor(i) {
-    // Distinct hue per mesh, avoiding the dark end
     const h = (i * 137.508) % 360;
-    return `hsl(${h}, 70%, 55%)`;
+    return `hsl(${h}, 72%, 58%)`;
   }
+
+  // Show live alpha value
+  const alphaInput = document.getElementById('overlayAlpha');
+  alphaInput.addEventListener('input', () => {
+    document.getElementById('overlayAlphaVal').textContent =
+      parseFloat(alphaInput.value).toFixed(2);
+  });
+
+  let overlayState = null;  // populated after buildOverlay completes
 
   document.getElementById('buildOverlay').addEventListener('click', async () => {
-    if (!model) { setStatus('overlayStatus','err','model not loaded'); return; }
-    setStatus('overlayStatus','','loading textures…');
+    if (!model) {
+      setStatus('overlayStatus','err','no model loaded'); return;
+    }
+    setStatus('overlayStatus','info','loading textures…');
 
-    const core = model.internalModel.coreModel;
-    const raw = core.getModel ? core.getModel() : core._model;
+    const raw = model.internalModel.coreModel._model
+              || model.internalModel.coreModel.getModel?.();
     if (!raw || !raw.drawables) {
-      setStatus('overlayStatus','err','no drawable access on model');
+      setStatus('overlayStatus','err',
+        'no drawable access — this model lacks runtime metadata');
       return;
     }
 
-    // Discover texture count from model3.json (we know it's 5 but let's check)
-    const tSettings = model.internalModel._modelSetting;
-    const texRefs = tSettings?._json?.FileReferences?.Textures || [];
-    const numTextures = texRefs.length || 5;
+    const mSet = model.internalModel._modelSetting;
+    const texRefs = mSet?._json?.FileReferences?.Textures || [];
+    const numTex = texRefs.length || 5;
 
     const drawableCount = raw.drawables.count;
     const ids = raw.drawables.ids;
     const indices = raw.drawables.indices;
-    const vertexCounts = raw.drawables.vertexCounts;
-    // Live2D drawables expose POSITIONS (model-space) and UVs separately.
-    // We want UVs for the atlas overlay.
     const vertexUvs = raw.drawables.vertexUvs;
     const textureIndices = raw.drawables.textureIndices;
 
-    log(`Model has ${drawableCount} drawables across ${numTextures} textures`);
+    log(`drawables=${drawableCount}, textures=${numTex}`);
+    setStatus('overlayStatus','info',
+      `found ${drawableCount} drawables across ${numTex} textures. Loading PNGs…`);
 
-    // Create a <canvas> per texture, draw the texture PNG as background,
-    // then overlay each drawable's UV bounds on it.
-    const stack = document.getElementById('atlasStack');
-    stack.innerHTML = '';
-    const legend = document.getElementById('legend');
-    legend.innerHTML = '';
-
-    // Load all texture images
+    // Load every texture PNG
     const texImages = await Promise.all(
-      Array.from({ length: numTextures }, (_, i) => {
+      Array.from({ length: numTex }, (_, i) => {
         return new Promise((res, rej) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => res(img);
-          img.onerror = () => rej(new Error(`texture ${i} failed`));
-          // Try both .model3 FileReferences path and our known TEX_BASE
-          const ref = texRefs[i] || `${TEX_BASE}/texture_0${i}.png`;
-          img.src = ref.startsWith('http') || ref.startsWith('/')
-            ? ref
-            : `/live2d-models/hermes_dark/runtime/${ref}`;
+          img.onerror = () =>
+            rej(new Error(`texture ${i} failed to load`));
+          const ref = texRefs[i];
+          img.src = ref
+            ? (ref.startsWith('/') || ref.startsWith('http')
+                ? ref
+                : `${TEX_BASE}/${ref}`)
+            : `${TEX_BASE}/hermes_dark.1024/texture_0${i}.png`;
         });
       })
     );
-    log('loaded', texImages.length, 'texture images');
 
-    // Create canvas per texture
+    // Build a canvas per texture
+    const stack = document.getElementById('atlasStack');
+    stack.innerHTML = '';
     const texCanvases = texImages.map((img, i) => {
-      const w = img.naturalWidth, h = img.naturalHeight;
       const wrap = document.createElement('div');
       wrap.className = 'atlas-item';
       const c = document.createElement('canvas');
-      c.width = w; c.height = h;
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
       const ctx = c.getContext('2d');
       ctx.drawImage(img, 0, 0);
       wrap.appendChild(c);
       const lbl = document.createElement('div');
-      lbl.className = 'label';
-      lbl.textContent = `texture_0${i}.png  (${w}×${h})`;
+      lbl.className = 'tex-label';
+      lbl.textContent = `texture_0${i}.png  (${c.width}×${c.height})`;
       wrap.appendChild(lbl);
       stack.appendChild(wrap);
-      return { canvas: c, ctx: ctx, w, h, backup: null };
-    });
-    // Back up the clean texture pixels so we can redraw on alpha change
-    texCanvases.forEach(tc => {
-      tc.backup = tc.ctx.getImageData(0, 0, tc.w, tc.h);
+      return { canvas: c, ctx: ctx,
+               w: c.width, h: c.height,
+               backup: ctx.getImageData(0, 0, c.width, c.height) };
     });
 
     // Per-mesh visibility state
     const meshVisible = new Array(drawableCount).fill(true);
+    overlayState = { texCanvases, drawableCount, ids, indices,
+                     vertexUvs, textureIndices, meshVisible };
 
     function redraw() {
       const alpha = parseFloat(document.getElementById('overlayAlpha').value);
       const showLabels = document.getElementById('showLabels').checked;
       const strokeOnly = document.getElementById('strokeOnly').checked;
 
-      // Reset each canvas to the clean texture
-      texCanvases.forEach(tc => {
-        tc.ctx.putImageData(tc.backup, 0, 0);
-      });
+      texCanvases.forEach(tc => tc.ctx.putImageData(tc.backup, 0, 0));
 
-      // For each drawable, compute its UV bounding polygon and draw
       for (let d = 0; d < drawableCount; d++) {
         if (!meshVisible[d]) continue;
         const ti = textureIndices[d];
@@ -370,7 +575,7 @@ all client-side using the Cubism SDK + pixi-live2d-display.</p>
 
         const uvs = vertexUvs[d];
         const idx = indices[d];
-        if (!uvs || uvs.length === 0) continue;
+        if (!uvs || uvs.length === 0 || !idx || idx.length === 0) continue;
 
         const ctx = tc.ctx;
         ctx.save();
@@ -380,13 +585,14 @@ all client-side using the Cubism SDK + pixi-live2d-display.</p>
         ctx.fillStyle = col;
         ctx.lineWidth = 2;
 
-        // Draw every triangle
         ctx.beginPath();
         for (let k = 0; k < idx.length; k += 3) {
-          const a = idx[k] * 2, b = idx[k+1] * 2, c = idx[k+2] * 2;
-          const ax = uvs[a]     * tc.w, ay = (1 - uvs[a+1])     * tc.h;
-          const bx = uvs[b]     * tc.w, by = (1 - uvs[b+1])     * tc.h;
-          const cx = uvs[c]     * tc.w, cy = (1 - uvs[c+1])     * tc.h;
+          const a = idx[k]   * 2;
+          const b = idx[k+1] * 2;
+          const c = idx[k+2] * 2;
+          const ax = uvs[a]   * tc.w, ay = (1 - uvs[a+1])   * tc.h;
+          const bx = uvs[b]   * tc.w, by = (1 - uvs[b+1])   * tc.h;
+          const cx = uvs[c]   * tc.w, cy = (1 - uvs[c+1])   * tc.h;
           ctx.moveTo(ax, ay);
           ctx.lineTo(bx, by);
           ctx.lineTo(cx, cy);
@@ -401,9 +607,7 @@ all client-side using the Cubism SDK + pixi-live2d-display.</p>
         }
         ctx.restore();
 
-        // Label at mesh centroid (first vertex)
         if (showLabels && uvs.length >= 2) {
-          // Find UV centroid (average of a few vertices is fine)
           let sx = 0, sy = 0, n = 0;
           for (let k = 0; k < uvs.length; k += 2) {
             sx += uvs[k]; sy += uvs[k+1]; n++;
@@ -411,25 +615,28 @@ all client-side using the Cubism SDK + pixi-live2d-display.</p>
           const lx = (sx / n) * tc.w;
           const ly = (1 - sy / n) * tc.h;
           ctx.save();
-          ctx.fillStyle = '#fff';
-          ctx.strokeStyle = '#000';
-          ctx.lineWidth = 3;
           ctx.font = 'bold 11px monospace';
           const label = ids[d] || `mesh_${d}`;
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 3;
           ctx.strokeText(label, lx, ly);
+          ctx.fillStyle = '#fff';
           ctx.fillText(label, lx, ly);
           ctx.restore();
         }
       }
     }
+    overlayState.redraw = redraw;
 
     // Build legend
+    const legend = document.getElementById('legend');
+    legend.innerHTML = '';
     for (let d = 0; d < drawableCount; d++) {
       const entry = document.createElement('div');
       entry.dataset.idx = d;
       entry.innerHTML = `<span class="swatch" style="background:${colorFor(d)}"></span>`
                       + (ids[d] || `mesh_${d}`)
-                      + ` <span style="color:#555">(tex${textureIndices[d]})</span>`;
+                      + ` <span style="color:#555">[tex${textureIndices[d]}]</span>`;
       entry.addEventListener('click', () => {
         meshVisible[d] = !meshVisible[d];
         entry.classList.toggle('hidden', !meshVisible[d]);
@@ -437,16 +644,33 @@ all client-side using the Cubism SDK + pixi-live2d-display.</p>
       });
       legend.appendChild(entry);
     }
+    document.getElementById('legendWrap').style.display = '';
 
     // Rerender on control change
     ['overlayAlpha','showLabels','strokeOnly'].forEach(id => {
-      document.getElementById(id).addEventListener('input', redraw);
-      document.getElementById(id).addEventListener('change', redraw);
+      const el = document.getElementById(id);
+      el.addEventListener('input', redraw);
+      el.addEventListener('change', redraw);
     });
 
     redraw();
-    setStatus('overlayStatus','ok',
-      `${drawableCount} drawables drawn across ${numTextures} textures`);
+    setStatus('overlayStatus', 'ok',
+      `built: ${drawableCount} mesh overlays across ${numTex} textures. ` +
+      `Scroll down to view. Click legend entries to isolate features.`);
+  });
+
+  // Show-all / hide-all convenience buttons
+  document.getElementById('legendAll').addEventListener('click', () => {
+    if (!overlayState) return;
+    overlayState.meshVisible.fill(true);
+    document.querySelectorAll('#legend div').forEach(e => e.classList.remove('hidden'));
+    overlayState.redraw();
+  });
+  document.getElementById('legendNone').addEventListener('click', () => {
+    if (!overlayState) return;
+    overlayState.meshVisible.fill(false);
+    document.querySelectorAll('#legend div').forEach(e => e.classList.add('hidden'));
+    overlayState.redraw();
   });
 
 })();
