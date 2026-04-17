@@ -72,9 +72,12 @@ app.add_middleware(
 )
 
 # Serve Live2D SDK libs from OLLV's frontend
+# Note: follow_symlink intentionally left OFF — a symlink inside the libs
+# tree could otherwise expose arbitrary filesystem content via this mount.
+# Localhost bind + CORS limits blast radius, but defense-in-depth.
 _libs_dir = FRONTEND_DIR / "libs"
 if _libs_dir.exists():
-    app.mount("/frontend/libs", StaticFiles(directory=str(_libs_dir), follow_symlink=True), name="libs")
+    app.mount("/frontend/libs", StaticFiles(directory=str(_libs_dir)), name="libs")
 else:
     print(f"  CRITICAL: {_libs_dir} not found — Live2D Core unavailable!")
     print(f"  The editor will NOT work without this. Set OLLV_DIR correctly.")
@@ -83,9 +86,9 @@ else:
     async def missing_libs(path: str):
         raise HTTPException(503, f"Live2D SDK not found. Set OLLV_DIR to your Open-LLM-VTuber directory. Missing: {_libs_dir}")
 
-# Serve model files (textures, moc3, etc)
+# Serve model files (textures, moc3, etc) — follow_symlink OFF for same reason
 if MODELS_DIR.exists():
-    app.mount("/live2d-models", StaticFiles(directory=str(MODELS_DIR), follow_symlink=True), name="models")
+    app.mount("/live2d-models", StaticFiles(directory=str(MODELS_DIR)), name="models")
 else:
     print(f"  CRITICAL: {MODELS_DIR} not found — no models available!")
     print(f"  Set OLLV_DIR to your Open-LLM-VTuber directory.")
@@ -93,6 +96,70 @@ else:
     @app.get("/live2d-models/{path:path}")
     async def missing_models(path: str):
         raise HTTPException(503, f"Models directory not found. Set OLLV_DIR correctly. Missing: {MODELS_DIR}")
+
+# Phase 2: Serve Cubism Core from /libs (shortcut for index.html)
+_libs_dir_2 = _libs_dir  # reuse existing path
+if _libs_dir_2.exists():
+    app.mount("/libs", StaticFiles(directory=str(_libs_dir_2)), name="core_libs")
+
+# Phase 2: Serve compiled dist directory
+_dist_dir = EDITOR_DIR / "dist"
+if _dist_dir.exists():
+    app.mount("/dist", StaticFiles(directory=str(_dist_dir)), name="dist")
+else:
+    print(f"  INFO: dist/ not yet built — run 'npm run build' in editor/")
+
+# Phase 2: Serve Cubism WebGL shaders
+_shaders_dir = EDITOR_DIR / "lib" / "CubismWebFramework" / "Shaders"
+if _shaders_dir.exists():
+    app.mount("/shaders", StaticFiles(directory=str(_shaders_dir)), name="shaders")
+
+# Phase 2: Serve static files (index.html)
+_static_dir = EDITOR_DIR / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+# Phase 2: Serve Hermes Puppet Engine
+# Default location is ~/hermes-puppet-engine (outside the repo). This is an
+# out-of-tree path by design — the puppet engine is a separate research
+# project. Override with HERMES_PUPPET_DIR env var to point somewhere else
+# (e.g. an in-repo copy for packaged distributions).
+#
+# Security posture:
+#   - Resolved to an absolute path to defeat relative-path traversal.
+#   - Must exist on disk before we mount (no silent auto-create).
+#   - Warning printed at startup if the path falls outside HOME — makes it
+#     explicit when non-default locations are served.
+_puppet_override = os.environ.get("HERMES_PUPPET_DIR")
+_puppet_dir = (
+    Path(_puppet_override).expanduser().resolve()
+    if _puppet_override
+    else (Path.home() / "hermes-puppet-engine").resolve()
+)
+if _puppet_dir.exists() and _puppet_dir.is_dir():
+    try:
+        # If the resolved path is not under HOME, warn loudly. Localhost bind
+        # keeps this contained, but still — user should know.
+        _home_resolved = Path.home().resolve()
+        try:
+            _puppet_dir.relative_to(_home_resolved)
+            _outside_home = False
+        except ValueError:
+            _outside_home = True
+
+        if _outside_home:
+            print(f"  WARNING: /puppet is serving {_puppet_dir}")
+            print(f"           This path is OUTSIDE your home directory.")
+            print(f"           Localhost bind + CORS limits exposure, but review the contents.")
+        else:
+            print(f"  INFO: /puppet serves {_puppet_dir}")
+    except OSError as _e:
+        print(f"  INFO: /puppet path check failed: {_e}")
+
+    app.mount("/puppet", StaticFiles(directory=str(_puppet_dir)), name="puppet")
+else:
+    if _puppet_override:
+        print(f"  WARNING: HERMES_PUPPET_DIR={_puppet_override!r} does not exist or is not a directory — /puppet not mounted")
 
 
 @app.get("/", response_class=HTMLResponse)
