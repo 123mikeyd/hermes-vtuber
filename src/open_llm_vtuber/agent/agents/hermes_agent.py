@@ -53,6 +53,9 @@ from ..transformers import (
 from ...config_manager import TTSPreprocessorConfig
 from ..input_types import BatchInput, TextSource
 
+# Persona v2 (Phase 2a). Optional — agent still works with plain `system` string.
+from ...persona import Identity, SessionMemory, PersonaComposer
+
 
 # Matches the session_id line hermes emits when --pass-session-id is set.
 # Example: "session_id: 20260417_014722_742a04"
@@ -81,6 +84,10 @@ class HermesAgent(AgentInterface):
         segment_method: str = "pysbd",
         model: str = "",
         timeout: int = 120,
+        # Phase 2a — persona memory layer (all optional for backward compat)
+        identity: Optional[Identity] = None,
+        session_memory: Optional[SessionMemory] = None,
+        composer: Optional[PersonaComposer] = None,
     ):
         super().__init__()
         self._hermes_path = hermes_path
@@ -91,6 +98,15 @@ class HermesAgent(AgentInterface):
         self._segment_method = segment_method
         self._model = model
         self._timeout = timeout
+
+        # Phase 2a: identity is injected by the composer on turn 1.
+        # session_memory records every turn and provides the recent window +
+        # rolling summary. composer assembles everything with budget caps.
+        # If identity is None, we fall back to the classic `system` path —
+        # persona v2 is fully optional.
+        self._identity = identity
+        self._session_memory = session_memory or SessionMemory()
+        self._composer = composer or PersonaComposer()
 
         # In-agent memory is now a fallback. Hermes holds the real conversation.
         # We keep this only for handle_interrupt() and for the first-turn
@@ -170,18 +186,33 @@ class HermesAgent(AgentInterface):
     def _build_prompt(self, user_message: str) -> str:
         """Build the prompt passed to `hermes chat -q`.
 
-        On turn 1 (no session yet): include system + short memory prefix so
+        On turn 1 (no session yet): include system + memory prefix so
         hermes starts the new session with our persona context.
 
         On turn 2+: just the user's new message. Hermes already has the
         persona + prior turns in the resumed session's state.
+
+        Phase 2a: when an Identity is attached, use PersonaComposer to
+        build the tier 1 + tier 3 system block. Otherwise fall back to
+        the classic `self._system` string for backward compatibility.
         """
         if self._session_id is None:
-            # First turn — we need to prime hermes with system + any seeded memory
+            # First turn — prime hermes with the full composed system prompt
+            if self._identity is not None:
+                composed = self._composer.compose(
+                    identity=self._identity,
+                    session_memory=self._session_memory,
+                )
+                logger.info(
+                    f"First-turn system prompt: {composed.tokens_estimated} est. tokens "
+                    f"(budget {composed.tokens_budget}, truncated={composed.truncated})"
+                )
+                return f"System: {composed.text}\n\nUser: {user_message}\n\nAssistant:"
+
+            # Legacy path — plain system string + ad-hoc memory list
             parts = []
             if self._system:
                 parts.append(f"System: {self._system}")
-            # Only prior seeded memory (e.g. loaded from chat history), not turns we've sent
             recent = self._memory[-10:] if len(self._memory) > 10 else self._memory
             for msg in recent:
                 role = msg["role"].capitalize()
@@ -372,6 +403,57 @@ class HermesAgent(AgentInterface):
             logger.error(f"Error calling hermes: {e}")
             return f"[Error: {str(e)[:200]}]"
 
+    async def _refresh_summary(self) -> None:
+        """Background task: regenerate the rolling summary of older turns.
+
+        Runs out-of-band from the user's active turn. Uses a SEPARATE
+        hermes session (no --resume) so we don't contaminate the
+        character's own conversation state with summarization prompts.
+
+        Failures are logged and swallowed — summarization is best-effort,
+        never blocks the user, and stale summaries degrade gracefully.
+        """
+        from ...persona.session_memory import build_summary_prompt
+        try:
+            older = self._session_memory.older_than_recent()
+            if not older:
+                return
+            prompt = build_summary_prompt(
+                older, prior_summary=self._session_memory.rolling_summary
+            )
+            logger.debug(
+                f"Refreshing rolling summary over {len(older)} older turns "
+                f"({len(prompt)} prompt chars)"
+            )
+            # Call hermes with a FRESH session — intentionally no --resume.
+            cmd = [
+                self._hermes_path, "chat", "-Q", "-q", prompt,
+                "--source", "tool",
+            ]
+            if self._model:
+                cmd.extend(["--model", self._model])
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=self._timeout
+            )
+            if proc.returncode != 0:
+                logger.warning(
+                    f"Summary refresh exited {proc.returncode}: "
+                    f"{stderr.decode('utf-8', errors='replace')[:200]}"
+                )
+                return
+            summary_text = self._clean_response(
+                self._strip_thinking(stdout.decode("utf-8", errors="replace").strip())
+            ).strip()
+            if summary_text:
+                self._session_memory.set_summary(summary_text)
+        except Exception as e:
+            logger.warning(f"Summary refresh failed (non-fatal): {e}")
+
     def _chat_function_factory(
         self,
     ) -> Callable[[BatchInput], AsyncIterator[Union[SentenceOutput, Dict[str, Any]]]]:
@@ -412,6 +494,18 @@ class HermesAgent(AgentInterface):
             # but interrupt handling reads this list.
             self._add_message("user", user_text)
             self._add_message("assistant", full_response)
+
+            # Phase 2a: also record into SessionMemory for the tier-3 window
+            # and future rolling summary. Separate from self._memory because
+            # SessionMemory carries timestamps, persists to disk, and is what
+            # the composer reads on the NEXT new session to remember context.
+            self._session_memory.add_turn("user", user_text)
+            self._session_memory.add_turn("assistant", full_response)
+            if self._session_memory.needs_summary():
+                # Fire-and-forget: schedule summarization but don't await.
+                # The refreshed summary will be in place for any NEW session
+                # we start later; mid-session hermes has its own memory.
+                asyncio.create_task(self._refresh_summary())
 
             # Yield tokens so sentence_divider can process them
             tokens = full_response.split()
