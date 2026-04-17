@@ -202,6 +202,41 @@ def test_composer_mood_line() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Test 7b — hysteresis: two-sentence minimum + no flicker
+# ---------------------------------------------------------------------------
+
+def test_hysteresis() -> None:
+    section("Test 7b: Hysteresis — 2-sentence minimum + no flicker")
+    # Low-focus character so the excited test lands in 'excited', not 'focused'
+    mood = MoodState(baseline=MoodBaseline(valence=0.3, energy=0.1, social=0.4, focus=0.2))
+
+    # 1 strong energy turn — must NOT flip (two-sentence minimum)
+    mood.apply_delta(MoodDelta(energy=0.9, reason="strong #1"))
+    q1 = mood.quadrant()
+    assert q1 == "calm", f"1 strong turn flipped to {q1}, should still be calm"
+    print(f"[OK] 1 strong turn: stayed calm (energy={mood.energy:.2f})")
+
+    # 2nd strong energy turn — must flip to excited
+    mood.apply_delta(MoodDelta(energy=0.9, reason="strong #2"))
+    q2 = mood.quadrant()
+    assert q2 == "excited", f"2 strong turns should flip to excited, got {q2}"
+    print(f"[OK] 2 strong turns: flipped to excited (energy={mood.energy:.2f})")
+
+    # 1 mild calm reply — must STAY excited (hysteresis protects against flicker)
+    mood.apply_delta(MoodDelta(energy=-0.2, reason="calm reply"))
+    q3 = mood.quadrant()
+    assert q3 == "excited", f"mild calm reply should NOT drop quadrant, got {q3}"
+    print(f"[OK] mild calm reply: stayed excited (energy={mood.energy:.2f})")
+
+    # Sustained calming — eventually falls back to calm (stay threshold 0.25)
+    for i in range(5):
+        mood.apply_delta(MoodDelta(energy=-0.3, reason=f"calming #{i+1}"))
+    q4 = mood.quadrant()
+    assert q4 == "calm", f"sustained calming should return to calm, got {q4}"
+    print(f"[OK] sustained calming: dropped to calm (energy={mood.energy:.2f})")
+
+
+# ---------------------------------------------------------------------------
 # Test 8 — LIVE integration: mood drifts across a conversation
 # ---------------------------------------------------------------------------
 
@@ -287,6 +322,7 @@ def main() -> None:
     test_serialization()
     test_classifier()
     test_composer_mood_line()
+    test_hysteresis()
     asyncio.run(test_live_mood_drift())
 
     print()

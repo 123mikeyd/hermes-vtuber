@@ -43,10 +43,34 @@ from .identity import MoodBaseline
 
 # How many seconds it takes for mood to decay halfway back to baseline
 # when no new input arrives. Tuned for conversational pacing — half-life
-# ~2 minutes means: a spike from a one-off sad sentence fades by the
-# time you've had three more exchanges, but a sustained sad conversation
-# keeps topping the mood up and it stays there.
-MOOD_HALFLIFE_SECONDS = 120.0
+# ~4 minutes means: a spike survives a short break (bathroom, sip of
+# coffee) and still colors the next exchange, but eventually fades if
+# the conversation truly stops. Adjust up for more persistent mood,
+# down for more volatile.
+MOOD_HALFLIFE_SECONDS = 240.0
+
+# Hysteresis thresholds — thermostat-style two-level gates on quadrant
+# transitions. Crossing INTO a quadrant requires a stronger signal than
+# staying in it, which prevents flicker when energy hovers near the
+# boundary. Based on MOOD_UPDATE_WEIGHT=0.3 and MoodClassifier's typical
+# +/-0.9 delta per strongly-worded sentence:
+#   - Nova's baseline energy is 0.1; one strong turn nudges ~+0.27
+#     (to ~0.37), still below 0.55, so it takes a SECOND strong turn
+#     (~+0.27 to 0.64) to flip to excited. Two-sentence minimum.
+#   - Stay-in thresholds are lower, so a calm reply mid-excited-run
+#     doesn't instantly kick her back to calm.
+MOOD_ENTER_EXCITED_ENERGY = 0.55
+MOOD_STAY_EXCITED_ENERGY  = 0.25
+
+MOOD_ENTER_FOCUSED_ENERGY = 0.55   # focused also needs high energy
+MOOD_ENTER_FOCUSED_FOCUS  = 0.50   # AND high focus
+MOOD_STAY_FOCUSED_ENERGY  = 0.25
+MOOD_STAY_FOCUSED_FOCUS   = 0.25
+
+MOOD_ENTER_TIRED_ENERGY   = -0.35
+MOOD_ENTER_TIRED_VALENCE  = -0.10
+MOOD_STAY_TIRED_ENERGY    = -0.10
+MOOD_STAY_TIRED_VALENCE   = 0.05    # slight positive valence still counts as tired
 
 # How much influence a single classifier delta has on the current mood.
 # Conversations should nudge mood, not yank it. 0.3 = a strongly sad
@@ -100,6 +124,11 @@ class MoodState:
     # decay step. `None` means "never applied" — first apply_delta()
     # starts the clock.
     last_update: Optional[float] = None
+
+    # Current quadrant label. Stateful because hysteresis needs to know
+    # where we ARE to decide whether to leave. Starts at "calm" and
+    # updates whenever quadrant() is called.
+    current_quadrant: str = "calm"
 
     def __post_init__(self) -> None:
         # Initialize to baseline on first construction — more natural
@@ -239,22 +268,58 @@ class MoodState:
         """Return one of the four idle-pool labels for Phase 4 frontend
         consumption:
 
-            "calm"     — low energy, non-negative valence
+            "calm"     — low energy, non-negative valence (default)
             "tired"    — low energy, negative valence
             "excited"  — high energy, non-negative valence
             "focused"  — high energy, high focus (overrides excited)
 
+        THERMOSTAT HYSTERESIS: this method is stateful. The thresholds
+        to ENTER a quadrant are higher than the thresholds to STAY in
+        one. This prevents flicker when the mood vector hovers right
+        at a boundary. See the MOOD_ENTER_* / MOOD_STAY_* constants
+        at the top of this module for exact numbers.
+
         These map 1:1 to the Idle_calm / Idle_tired / Idle_excited /
-        Idle_focused motion groups Phase 4 will introduce in model3.json.
+        Idle_focused motion groups Phase 4 introduces.
         """
-        if self.energy >= 0.15:
-            if self.focus >= 0.4:
-                return "focused"
-            return "excited"
-        # Low-ish energy
-        if self.valence < -0.1:
-            return "tired"
-        return "calm"
+        q = self.current_quadrant
+
+        # --- Stay-in check first (asks: do we STILL qualify for our
+        #     current quadrant?). If yes, don't move.
+        if q == "excited":
+            if self.energy >= MOOD_STAY_EXCITED_ENERGY:
+                return q
+        elif q == "focused":
+            if (self.energy >= MOOD_STAY_FOCUSED_ENERGY
+                    and self.focus >= MOOD_STAY_FOCUSED_FOCUS):
+                return q
+        elif q == "tired":
+            if (self.energy <= MOOD_STAY_TIRED_ENERGY
+                    and self.valence <= MOOD_STAY_TIRED_VALENCE):
+                return q
+        # "calm" always re-evaluates since it's the fallback
+
+        # --- Enter check: do we qualify to enter a non-calm quadrant?
+        #     Focused takes priority over excited if both qualify.
+        new_q = "calm"
+        if (self.energy >= MOOD_ENTER_FOCUSED_ENERGY
+                and self.focus >= MOOD_ENTER_FOCUSED_FOCUS):
+            new_q = "focused"
+        elif self.energy >= MOOD_ENTER_EXCITED_ENERGY:
+            new_q = "excited"
+        elif (self.energy <= MOOD_ENTER_TIRED_ENERGY
+                and self.valence <= MOOD_ENTER_TIRED_VALENCE):
+            new_q = "tired"
+
+        if new_q != q:
+            logger.info(
+                f"Mood quadrant transition: {q} -> {new_q} "
+                f"(v={self.valence:+.2f} e={self.energy:+.2f} "
+                f"s={self.social:+.2f} f={self.focus:+.2f})"
+            )
+            self.current_quadrant = new_q
+
+        return self.current_quadrant
 
     # --- Serialization ---
 
@@ -267,6 +332,7 @@ class MoodState:
             "social": round(self.social, 4),
             "focus": round(self.focus, 4),
             "last_update": self.last_update,
+            "current_quadrant": self.current_quadrant,
         }
 
     @classmethod
@@ -292,6 +358,7 @@ class MoodState:
             social=float(data.get("social", baseline.social)),
             focus=float(data.get("focus", baseline.focus)),
             last_update=data.get("last_update"),
+            current_quadrant=str(data.get("current_quadrant", "calm")),
         )
 
     def snapshot(self) -> Dict[str, Any]:
