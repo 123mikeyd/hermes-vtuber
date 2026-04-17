@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hermes Atlas & Avatar Tool — Nova</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    background: #0a0a0a;
+    color: #d8d8d8;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 { color: #7af; margin: 0 0 6px 0; font-size: 22px; }
+  h2 { color: #7af; margin: 20px 0 8px 0; font-size: 16px;
+       border-bottom: 1px solid #333; padding-bottom: 4px; }
+  p.note { color: #888; font-size: 13px; margin: 6px 0; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .pane {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 14px;
+    min-width: 380px;
+  }
+  button {
+    background: #223;
+    color: #7af;
+    border: 1px solid #445;
+    padding: 8px 14px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    cursor: pointer;
+    margin: 2px 4px 2px 0;
+  }
+  button:hover { background: #334; color: #fff; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  label { display: block; margin: 10px 0 4px 0; font-size: 13px; color: #aaa; }
+  input[type=range] { width: 220px; }
+  input[type=number] { width: 60px; background: #222; color: #d8d8d8;
+                       border: 1px solid #444; padding: 4px; }
+  .status { font-size: 12px; color: #888; margin-top: 8px; min-height: 16px; }
+  .status.ok { color: #8f8; }
+  .status.err { color: #f88; }
+  #modelCanvas { background: #181818; border: 1px solid #333; display: block; }
+  #avatarCanvas { background: #181818; border: 1px solid #333; display: block; }
+  .atlas-stack { display: flex; flex-direction: column; gap: 10px; }
+  .atlas-item {
+    position: relative;
+    background: #000;
+    border: 1px solid #333;
+  }
+  .atlas-item canvas {
+    display: block;
+    width: 512px;   /* scaled down from 1024 for screen */
+    height: 512px;
+  }
+  .atlas-item .label {
+    position: absolute;
+    top: 4px; left: 4px;
+    background: rgba(0,0,0,0.8);
+    color: #7af;
+    padding: 2px 6px;
+    font-size: 12px;
+    pointer-events: none;
+  }
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    font-size: 11px;
+    margin-top: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .legend div { padding: 2px 4px; cursor: pointer; }
+  .legend div:hover { background: #223; }
+  .legend div.hidden { opacity: 0.3; }
+  .legend .swatch {
+    display: inline-block; width: 10px; height: 10px;
+    margin-right: 6px; vertical-align: middle;
+    border: 1px solid #000;
+  }
+  .controls label { display: inline-block; margin-right: 10px; }
+  .meta { font-size: 11px; color: #666; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<h1>Hermes Atlas & Avatar Tool</h1>
+<p class="note">Single-file tool for inspecting the hermes_dark Live2D model's
+texture atlas and generating an avatar PNG cropped from the live render.
+Open this in the same browser you use for the VTuber (localhost:12393) so the
+model files are already served. No server of our own required — it's
+all client-side using the Cubism SDK + pixi-live2d-display.</p>
+
+<div class="row">
+
+  <!-- Pane 1: live model render + avatar extractor -->
+  <div class="pane">
+    <h2>Live model render</h2>
+    <canvas id="modelCanvas" width="512" height="512"></canvas>
+    <div class="controls" style="margin-top: 8px;">
+      <label>zoom <input id="zoom" type="range" min="0.5" max="3.0" step="0.05" value="1.8"></label>
+      <label>x    <input id="offX" type="range" min="-256" max="256" step="1" value="0"></label>
+      <label>y    <input id="offY" type="range" min="-256" max="256" step="1" value="0"></label>
+    </div>
+
+    <h2>Generate avatar PNG</h2>
+    <p class="note">Cropped square PNG ready to drop in
+    <code>/home/mikeyd/Open-LLM-VTuber/avatars/</code>.
+    Recommended size: 512. Click "Render avatar" then
+    "Download" to save.</p>
+    <div class="controls">
+      <label>size <input id="avatarSize" type="number" min="128" max="1024" step="64" value="512"></label>
+      <label>face crop
+        <input id="faceCrop" type="checkbox" checked>
+      </label>
+    </div>
+    <button id="renderAvatar">Render avatar</button>
+    <button id="downloadAvatar" disabled>Download nova.png</button>
+    <div id="avatarStatus" class="status"></div>
+    <div style="margin-top: 10px;">
+      <canvas id="avatarCanvas" width="512" height="512"></canvas>
+    </div>
+  </div>
+
+  <!-- Pane 2: atlas overlay -->
+  <div class="pane">
+    <h2>Atlas overlay</h2>
+    <p class="note">Each ArtMesh's UV bounds are drawn on top of the
+    texture PNG it lives in. Hover a legend entry to isolate one mesh;
+    click to toggle.</p>
+    <div class="controls">
+      <label>alpha <input id="overlayAlpha" type="range" min="0" max="1" step="0.05" value="0.5"></label>
+      <label>labels <input id="showLabels" type="checkbox" checked></label>
+      <label>stroke only <input id="strokeOnly" type="checkbox"></label>
+    </div>
+    <button id="buildOverlay">Build atlas overlay</button>
+    <div id="overlayStatus" class="status"></div>
+    <div id="atlasStack" class="atlas-stack"></div>
+    <div id="legend" class="legend"></div>
+  </div>
+
+</div>
+
+<!-- Cubism runtime -->
+<script src="/frontend/libs/live2dcubismcore.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
+
+<script>
+(async function() {
+  'use strict';
+
+  const MODEL_URL = '/live2d-models/hermes_dark/runtime/hermes_dark.model3.json';
+  const TEX_BASE = '/live2d-models/hermes_dark/runtime/hermes_dark.1024';
+  const log = (...a) => console.log('%c[atlas-tool]', 'color:#7af', ...a);
+  const warn = (...a) => console.warn('%c[atlas-tool]', 'color:#fa7', ...a);
+
+  // ------------- Live model render -------------
+
+  const app = new PIXI.Application({
+    view: document.getElementById('modelCanvas'),
+    width: 512, height: 512,
+    backgroundColor: 0x181818,
+    antialias: true,
+    autoStart: true,
+  });
+
+  let model = null;
+  function layoutModel() {
+    if (!model) return;
+    const z = parseFloat(document.getElementById('zoom').value);
+    const ox = parseFloat(document.getElementById('offX').value);
+    const oy = parseFloat(document.getElementById('offY').value);
+    // Fit: the stock model is tall; scale so its natural size ~ canvas
+    const base = Math.min(
+      app.screen.width / (model.internalModel.width || 1024),
+      app.screen.height / (model.internalModel.height || 1024)
+    ) * 1.4;
+    model.scale.set(base * z);
+    model.anchor.set(0.5, 0.5);
+    model.position.set(app.screen.width / 2 + ox,
+                       app.screen.height / 2 + oy);
+  }
+  ['zoom','offX','offY'].forEach(id => {
+    document.getElementById(id).addEventListener('input', layoutModel);
+  });
+
+  try {
+    log('loading model:', MODEL_URL);
+    model = await PIXI.live2d.Live2DModel.from(MODEL_URL, {
+      autoInteract: false, autoUpdate: true,
+    });
+    app.stage.addChild(model);
+    layoutModel();
+    log('model loaded:', model);
+    window.__atlasTool = { model, app };  // debug handle
+  } catch (e) {
+    warn('model load failed:', e);
+  }
+
+  // ------------- Avatar generator -------------
+
+  document.getElementById('renderAvatar').addEventListener('click', () => {
+    if (!model) { setStatus('avatarStatus','err','model not loaded'); return; }
+    const size = parseInt(document.getElementById('avatarSize').value) || 512;
+    const faceCrop = document.getElementById('faceCrop').checked;
+
+    // Render the model into an offscreen PIXI renderer at size x size.
+    // We use app.renderer.extract to pull a PNG-compatible Image.
+    const rt = PIXI.RenderTexture.create({ width: size, height: size });
+
+    // Put the model in a temp container so we can scale/center without
+    // touching our on-screen preview.
+    const tmp = new PIXI.Container();
+    tmp.addChild(model);
+    // Compute fit scale: if faceCrop, zoom into upper 40% of model;
+    // otherwise, fit the whole model.
+    const mw = model.internalModel.width || 1024;
+    const mh = model.internalModel.height || 1024;
+    let scale = Math.min(size / mw, size / mh) * (faceCrop ? 2.4 : 1.1);
+    model.scale.set(scale);
+    model.anchor.set(0.5, 0.5);
+    model.position.set(size / 2, faceCrop ? size * 0.48 : size / 2);
+
+    // Render once, pull the pixel data
+    app.renderer.render(tmp, { renderTexture: rt });
+
+    // Extract to a canvas we can serialize to PNG blob
+    const canvas = app.renderer.extract.canvas(rt);
+    const out = document.getElementById('avatarCanvas');
+    out.width = size; out.height = size;
+    const ctx = out.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(canvas, 0, 0);
+
+    // Put model BACK in the live preview stage
+    app.stage.addChild(model);
+    layoutModel();
+
+    // Stash for download
+    window.__avatarBlob = null;
+    out.toBlob((blob) => {
+      window.__avatarBlob = blob;
+      document.getElementById('downloadAvatar').disabled = false;
+      setStatus('avatarStatus','ok',
+        `rendered ${size}×${size}, ${(blob.size/1024).toFixed(1)} KB`);
+    }, 'image/png');
+  });
+
+  document.getElementById('downloadAvatar').addEventListener('click', () => {
+    if (!window.__avatarBlob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(window.__avatarBlob);
+    a.download = 'nova.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+
+  // ------------- Atlas overlay -------------
+
+  function setStatus(id, cls, msg) {
+    const el = document.getElementById(id);
+    el.className = 'status ' + cls;
+    el.textContent = msg;
+  }
+
+  function colorFor(i) {
+    // Distinct hue per mesh, avoiding the dark end
+    const h = (i * 137.508) % 360;
+    return `hsl(${h}, 70%, 55%)`;
+  }
+
+  document.getElementById('buildOverlay').addEventListener('click', async () => {
+    if (!model) { setStatus('overlayStatus','err','model not loaded'); return; }
+    setStatus('overlayStatus','','loading textures…');
+
+    const core = model.internalModel.coreModel;
+    const raw = core.getModel ? core.getModel() : core._model;
+    if (!raw || !raw.drawables) {
+      setStatus('overlayStatus','err','no drawable access on model');
+      return;
+    }
+
+    // Discover texture count from model3.json (we know it's 5 but let's check)
+    const tSettings = model.internalModel._modelSetting;
+    const texRefs = tSettings?._json?.FileReferences?.Textures || [];
+    const numTextures = texRefs.length || 5;
+
+    const drawableCount = raw.drawables.count;
+    const ids = raw.drawables.ids;
+    const indices = raw.drawables.indices;
+    const vertexCounts = raw.drawables.vertexCounts;
+    // Live2D drawables expose POSITIONS (model-space) and UVs separately.
+    // We want UVs for the atlas overlay.
+    const vertexUvs = raw.drawables.vertexUvs;
+    const textureIndices = raw.drawables.textureIndices;
+
+    log(`Model has ${drawableCount} drawables across ${numTextures} textures`);
+
+    // Create a <canvas> per texture, draw the texture PNG as background,
+    // then overlay each drawable's UV bounds on it.
+    const stack = document.getElementById('atlasStack');
+    stack.innerHTML = '';
+    const legend = document.getElementById('legend');
+    legend.innerHTML = '';
+
+    // Load all texture images
+    const texImages = await Promise.all(
+      Array.from({ length: numTextures }, (_, i) => {
+        return new Promise((res, rej) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => res(img);
+          img.onerror = () => rej(new Error(`texture ${i} failed`));
+          // Try both .model3 FileReferences path and our known TEX_BASE
+          const ref = texRefs[i] || `${TEX_BASE}/texture_0${i}.png`;
+          img.src = ref.startsWith('http') || ref.startsWith('/')
+            ? ref
+            : `/live2d-models/hermes_dark/runtime/${ref}`;
+        });
+      })
+    );
+    log('loaded', texImages.length, 'texture images');
+
+    // Create canvas per texture
+    const texCanvases = texImages.map((img, i) => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const wrap = document.createElement('div');
+      wrap.className = 'atlas-item';
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      wrap.appendChild(c);
+      const lbl = document.createElement('div');
+      lbl.className = 'label';
+      lbl.textContent = `texture_0${i}.png  (${w}×${h})`;
+      wrap.appendChild(lbl);
+      stack.appendChild(wrap);
+      return { canvas: c, ctx: ctx, w, h, backup: null };
+    });
+    // Back up the clean texture pixels so we can redraw on alpha change
+    texCanvases.forEach(tc => {
+      tc.backup = tc.ctx.getImageData(0, 0, tc.w, tc.h);
+    });
+
+    // Per-mesh visibility state
+    const meshVisible = new Array(drawableCount).fill(true);
+
+    function redraw() {
+      const alpha = parseFloat(document.getElementById('overlayAlpha').value);
+      const showLabels = document.getElementById('showLabels').checked;
+      const strokeOnly = document.getElementById('strokeOnly').checked;
+
+      // Reset each canvas to the clean texture
+      texCanvases.forEach(tc => {
+        tc.ctx.putImageData(tc.backup, 0, 0);
+      });
+
+      // For each drawable, compute its UV bounding polygon and draw
+      for (let d = 0; d < drawableCount; d++) {
+        if (!meshVisible[d]) continue;
+        const ti = textureIndices[d];
+        const tc = texCanvases[ti];
+        if (!tc) continue;
+
+        const uvs = vertexUvs[d];
+        const idx = indices[d];
+        if (!uvs || uvs.length === 0) continue;
+
+        const ctx = tc.ctx;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        const col = colorFor(d);
+        ctx.strokeStyle = col;
+        ctx.fillStyle = col;
+        ctx.lineWidth = 2;
+
+        // Draw every triangle
+        ctx.beginPath();
+        for (let k = 0; k < idx.length; k += 3) {
+          const a = idx[k] * 2, b = idx[k+1] * 2, c = idx[k+2] * 2;
+          const ax = uvs[a]     * tc.w, ay = (1 - uvs[a+1])     * tc.h;
+          const bx = uvs[b]     * tc.w, by = (1 - uvs[b+1])     * tc.h;
+          const cx = uvs[c]     * tc.w, cy = (1 - uvs[c+1])     * tc.h;
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+          ctx.lineTo(cx, cy);
+          ctx.closePath();
+        }
+        if (strokeOnly) {
+          ctx.stroke();
+        } else {
+          ctx.fill();
+          ctx.globalAlpha = Math.min(1, alpha + 0.3);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Label at mesh centroid (first vertex)
+        if (showLabels && uvs.length >= 2) {
+          // Find UV centroid (average of a few vertices is fine)
+          let sx = 0, sy = 0, n = 0;
+          for (let k = 0; k < uvs.length; k += 2) {
+            sx += uvs[k]; sy += uvs[k+1]; n++;
+          }
+          const lx = (sx / n) * tc.w;
+          const ly = (1 - sy / n) * tc.h;
+          ctx.save();
+          ctx.fillStyle = '#fff';
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 3;
+          ctx.font = 'bold 11px monospace';
+          const label = ids[d] || `mesh_${d}`;
+          ctx.strokeText(label, lx, ly);
+          ctx.fillText(label, lx, ly);
+          ctx.restore();
+        }
+      }
+    }
+
+    // Build legend
+    for (let d = 0; d < drawableCount; d++) {
+      const entry = document.createElement('div');
+      entry.dataset.idx = d;
+      entry.innerHTML = `<span class="swatch" style="background:${colorFor(d)}"></span>`
+                      + (ids[d] || `mesh_${d}`)
+                      + ` <span style="color:#555">(tex${textureIndices[d]})</span>`;
+      entry.addEventListener('click', () => {
+        meshVisible[d] = !meshVisible[d];
+        entry.classList.toggle('hidden', !meshVisible[d]);
+        redraw();
+      });
+      legend.appendChild(entry);
+    }
+
+    // Rerender on control change
+    ['overlayAlpha','showLabels','strokeOnly'].forEach(id => {
+      document.getElementById(id).addEventListener('input', redraw);
+      document.getElementById(id).addEventListener('change', redraw);
+    });
+
+    redraw();
+    setStatus('overlayStatus','ok',
+      `${drawableCount} drawables drawn across ${numTextures} textures`);
+  });
+
+})();
+</script>
+</body>
+</html>
