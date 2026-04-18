@@ -36,6 +36,7 @@ from .expression_inference import (
     blend_to_param_deltas,
     build_expression_message,
 )
+from .sleep_detector import is_sleep_command, SLEEP_PHRASES
 
 __all__ = [
     "Identity",
@@ -61,4 +62,7 @@ __all__ = [
     "expression_infer",
     "blend_to_param_deltas",
     "build_expression_message",
+    # Phase 6
+    "is_sleep_command",
+    "SLEEP_PHRASES",
 ]

@@ -85,6 +85,30 @@ async def process_single_conversation(
         if images:
             logger.info(f"With {len(images)} images")
 
+        # Phase 6 — sleep-command detection. If the user's input is a
+        # standalone sleep instruction (not quoted, not buried in other
+        # text), fire a `sleep_command` WebSocket message so the sidecar
+        # puts Nova into the sleep state. The conversation still proceeds
+        # normally — Nova gets to acknowledge the instruction before
+        # falling asleep.
+        try:
+            from ..persona.sleep_detector import is_sleep_command
+            if is_sleep_command(input_text):
+                logger.info(
+                    f"Phase 6: sleep command detected in user input — "
+                    f"telling sidecar to start sleep cycle"
+                )
+                await websocket_send(
+                    json.dumps({
+                        "type": "sleep_command",
+                        "active": True,
+                        "reason": "user command",
+                    })
+                )
+        except Exception as _sleep_err:
+            # Best-effort — a detector bug must never break the turn
+            logger.warning(f"sleep_command detect failed (non-fatal): {_sleep_err}")
+
         try:
             # agent.chat yields Union[SentenceOutput, Dict[str, Any]]
             agent_output_stream = context.agent_engine.chat(batch_input)

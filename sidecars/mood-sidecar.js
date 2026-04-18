@@ -44,6 +44,10 @@
       excited: [],
       focused: [],
       listening: [],
+      // Phase 6 — sleep-related pools
+      sleep: [],
+      falling_asleep: [],
+      waking_up: [],
     },
     poolPickIndex: 0,        // round-robin within the current pool
     modelName: null,
@@ -53,6 +57,29 @@
                              // should start the next from our pool
     pollHandle: null,
     lastStartedFilename: null,
+
+    // ---------- Phase 6: sleep state machine ----------
+    // Inactivity tracking. `lastActivityMs` resets whenever the server
+    // emits something that proves Nova is "being talked to" — a
+    // mood_update (post-turn), expression_blend (mid-response), or
+    // listening_state:true (user started speaking).
+    lastActivityMs: performance.now(),
+    // Thresholds per Mike's spec (Apr 17, 2026):
+    drowsyAfterMs:  22 * 60 * 1000,   // 22 min → tired/calm mix
+    tiredAfterMs:   50 * 60 * 1000,   // 50 min → 100% tired pool
+    sleepAfterMs:   64 * 60 * 1000,   // 64 min → sleep state
+    // Sleep-state sub-phase. 'awake' is the normal mood pool path.
+    // 'drowsy' biases toward tired. 'tired' forces tired. 'falling'
+    // plays the falling_asleep transition once. 'asleep' loops the
+    // sleep motion. 'waking' plays waking_up once.
+    sleepPhase: 'awake',
+    // One-shot transition tracking — when we cross INTO a new phase,
+    // we play the transition motion once before reverting to the
+    // regular pool selection.
+    pendingTransition: null,    // null | 'falling_asleep' | 'waking_up'
+    // Manual override from sleep_command message — forces 'asleep'
+    // regardless of timer.
+    manualSleep: false,
   };
 
   // Helpful console badge so it's clear in DevTools that we're alive.
@@ -68,23 +95,143 @@
   // ---------------------------------------------------------------------
 
   /**
-   * Pick the next motion filename from the active pool.
-   * Listening pool wins over quadrant pool when isListening is true.
-   * Returns null if no pool is available.
+   * Re-evaluate the sleep state machine based on elapsed inactivity.
+   * Called from both pickNextMotion() and the idle poll loop so both
+   * paths see the same current phase.
+   *
+   * Returns the current phase:
+   *   'awake'   — regular mood pool
+   *   'drowsy'  — 60% tired, 40% calm mix
+   *   'tired'   — 100% tired pool
+   *   'falling' — play falling_asleep motion once, then -> asleep
+   *   'asleep'  — loop sleep motion
+   *   'waking'  — play waking_up motion once, then reset to awake
+   *
+   * Schedules pendingTransition when a boundary is crossed.
+   */
+  function updateSleepPhase() {
+    // Manual sleep overrides everything
+    if (state.manualSleep && state.sleepPhase !== 'asleep'
+                           && state.sleepPhase !== 'falling') {
+      if (state.sleepPhase !== 'waking') {
+        log('manual sleep command → falling_asleep');
+        state.sleepPhase = 'falling';
+        state.pendingTransition = 'falling_asleep';
+      }
+      return state.sleepPhase;
+    }
+
+    const elapsed = performance.now() - state.lastActivityMs;
+    const prev = state.sleepPhase;
+
+    // Phase transitions based on elapsed inactivity. We only advance
+    // FORWARD through these automatically; regressing (waking up)
+    // requires activity, which is handled by markActive().
+    let next = prev;
+    if (prev === 'awake') {
+      if (elapsed >= state.sleepAfterMs) next = 'falling';
+      else if (elapsed >= state.tiredAfterMs) next = 'tired';
+      else if (elapsed >= state.drowsyAfterMs) next = 'drowsy';
+    } else if (prev === 'drowsy') {
+      if (elapsed >= state.sleepAfterMs) next = 'falling';
+      else if (elapsed >= state.tiredAfterMs) next = 'tired';
+    } else if (prev === 'tired') {
+      if (elapsed >= state.sleepAfterMs) next = 'falling';
+    } else if (prev === 'falling') {
+      // Falling motion is ~4s; after that, go to asleep loop
+      if (elapsed - state.sleepAfterMs >= 4000) next = 'asleep';
+    } else if (prev === 'waking') {
+      // Waking motion is ~3s; after that, return to awake
+      if (performance.now() - state.wakingStartedMs >= 3500) {
+        next = 'awake';
+        state.manualSleep = false;  // clear manual-sleep flag
+      }
+    }
+
+    if (next !== prev) {
+      log(`sleep phase: ${prev} → ${next} (inactive ${(elapsed/60000).toFixed(1)}min)`);
+      state.sleepPhase = next;
+      if (next === 'falling') state.pendingTransition = 'falling_asleep';
+      if (next === 'waking')  state.pendingTransition = 'waking_up';
+    }
+    return state.sleepPhase;
+  }
+
+  /**
+   * Called whenever the server proves Nova is being interacted with.
+   * Resets inactivity timer. If she was asleep/drowsy, queue waking_up.
+   */
+  function markActive() {
+    state.lastActivityMs = performance.now();
+    state.manualSleep = false;
+    const phase = state.sleepPhase;
+    if (phase === 'asleep' || phase === 'falling') {
+      log(`activity resumed during ${phase} → waking_up`);
+      state.sleepPhase = 'waking';
+      state.pendingTransition = 'waking_up';
+      state.wakingStartedMs = performance.now();
+    } else if (phase === 'drowsy' || phase === 'tired') {
+      // Not asleep yet — just snap back to awake without a wake animation
+      log(`activity resumed during ${phase} → awake (no wake anim needed)`);
+      state.sleepPhase = 'awake';
+    }
+  }
+
+  /**
+   * Pick the next motion filename based on the full state machine:
+   *   1. If there's a pending transition (falling_asleep / waking_up),
+   *      return that motion AND clear pendingTransition so it plays once.
+   *   2. Listening overrides everything else (user is speaking now).
+   *   3. Otherwise, consult sleep phase:
+   *        'awake'   → current quadrant pool
+   *        'drowsy'  → 60% tired, 40% calm (random per-pick)
+   *        'tired'   → tired pool
+   *        'asleep'  → sleep pool (the loop)
+   *   4. Round-robin within the chosen pool.
    */
   function pickNextMotion() {
-    let pool = state.isListening ? state.pools.listening : null;
-    if (!pool || pool.length === 0) {
-      pool = state.pools[state.currentQuadrant] || [];
+    // 1. One-shot transition?
+    if (state.pendingTransition) {
+      const transitionPool = state.pools[state.pendingTransition] || [];
+      if (transitionPool.length > 0) {
+        const motion = transitionPool[0];
+        log(`pickNextMotion: transition → ${motion}`);
+        state.pendingTransition = null;
+        return motion;
+      }
+      // Transition requested but pool empty — clear and fall through
+      state.pendingTransition = null;
     }
-    if (pool.length === 0) {
-      // Last-ditch fallback to calm
-      pool = state.pools.calm || [];
+
+    // 2. Listening always wins (as before)
+    if (state.isListening) {
+      const lp = state.pools.listening;
+      if (lp && lp.length > 0) {
+        state.poolPickIndex = (state.poolPickIndex + 1) % lp.length;
+        return lp[state.poolPickIndex];
+      }
     }
-    if (pool.length === 0) {
-      return null;
+
+    // 3. Sleep phase selects pool
+    const phase = updateSleepPhase();
+    let pool;
+    if (phase === 'asleep') {
+      pool = state.pools.sleep;
+    } else if (phase === 'tired') {
+      pool = state.pools.tired;
+    } else if (phase === 'drowsy') {
+      // 60% tired, 40% calm random mix
+      pool = (Math.random() < 0.60) ? state.pools.tired : state.pools.calm;
+    } else {
+      // awake / falling / waking — falling and waking are handled
+      // above via pendingTransition, so this is just 'awake'
+      pool = state.pools[state.currentQuadrant];
     }
-    // Round-robin so all motions get airtime even with 2-entry pools
+
+    // Fallback chain
+    if (!pool || pool.length === 0) pool = state.pools.calm;
+    if (!pool || pool.length === 0) return null;
+
     state.poolPickIndex = (state.poolPickIndex + 1) % pool.length;
     return pool[state.poolPickIndex];
   }
@@ -144,6 +291,9 @@
 
   function maybeStartNextIdle() {
     if (!state.enabled) return;
+    // Phase 6: advance the sleep state machine every poll tick so
+    // phase transitions fire even while a motion is still playing.
+    updateSleepPhase();
     const manager = getLive2DManagerSafe();
     if (!manager) return;
     const model = manager.getModel(0);
@@ -220,7 +370,8 @@
         if (typeof evt.data !== 'string') return;
         if (evt.data.indexOf('mood_update') === -1 &&
             evt.data.indexOf('listening_state') === -1 &&
-            evt.data.indexOf('expression_blend') === -1) {
+            evt.data.indexOf('expression_blend') === -1 &&
+            evt.data.indexOf('sleep_command') === -1) {
           // Quick reject for the ~99% of messages that aren't ours
           return;
         }
@@ -229,6 +380,7 @@
           if (msg.type === 'mood_update') handleMoodUpdate(msg);
           else if (msg.type === 'listening_state') handleListeningState(msg);
           else if (msg.type === 'expression_blend') handleExpressionBlend(msg);
+          else if (msg.type === 'sleep_command') handleSleepCommand(msg);
         } catch (e) {
           // Not JSON or not our schema — ignore.
         }
@@ -251,6 +403,10 @@
   // ---------------------------------------------------------------------
 
   function handleMoodUpdate(msg) {
+    // Phase 6: a mood update means Nova just finished a turn — she's
+    // being talked to. Reset the inactivity timer.
+    markActive();
+
     const newQuadrant = msg.quadrant || 'calm';
     const previous = state.currentQuadrant;
     state.currentQuadrant = newQuadrant;
@@ -280,10 +436,30 @@
   function handleListeningState(msg) {
     const wasListening = state.isListening;
     state.isListening = !!msg.active;
+    if (state.isListening) {
+      // Phase 6: user is speaking — mark active regardless of transition.
+      markActive();
+    }
     if (wasListening !== state.isListening) {
       log(`listening: ${wasListening} -> ${state.isListening}`);
       // Reset round-robin when we toggle
       state.poolPickIndex = -1;
+    }
+  }
+
+  /**
+   * Phase 6: server-side sleep phrase detector fired. Force manual
+   * sleep — the updateSleepPhase loop will push into 'falling' on
+   * the next tick. The `active` field lets us toggle manual_sleep
+   * off (though we also auto-clear it on waking).
+   */
+  function handleSleepCommand(msg) {
+    const active = msg.active !== false;  // default true
+    log(`sleep command received (active=${active}): ${msg.reason || ''}`);
+    if (active) {
+      state.manualSleep = true;
+    } else {
+      state.manualSleep = false;
     }
   }
 
@@ -305,6 +481,9 @@
   let activeBlend = null;  // {deltas, durationMs, startTimeMs}
 
   function handleExpressionBlend(msg) {
+    // Phase 6: Nova speaking IS activity. Reset the inactivity timer.
+    markActive();
+
     const deltas = msg.deltas || {};
     const durationMs = Math.max(100, msg.duration_ms || 600);
     if (Object.keys(deltas).length === 0) return;
@@ -400,10 +579,28 @@
       window.__moodSidecar = {
         state,
         get activeBlend() { return activeBlend; },
+        get sleepPhase() { return state.sleepPhase; },
         pickNextMotion,
         resolveMotionByFilename,
         forceStart: maybeStartNextIdle,
         triggerExpression: handleExpressionBlend,  // for manual testing
+        // Phase 6 debug helpers — bypass the timer to test transitions:
+        forceSleep: () => {
+          log('forceSleep() called via __moodSidecar debug API');
+          state.manualSleep = true;
+          updateSleepPhase();
+        },
+        forceWake: () => {
+          log('forceWake() called via __moodSidecar debug API');
+          markActive();
+        },
+        // Collapse the timeline for testing — pass seconds instead of minutes:
+        setSleepTimersForTesting: (drowsySec, tiredSec, sleepSec) => {
+          state.drowsyAfterMs = drowsySec * 1000;
+          state.tiredAfterMs  = tiredSec  * 1000;
+          state.sleepAfterMs  = sleepSec  * 1000;
+          log(`sleep timers: drowsy=${drowsySec}s tired=${tiredSec}s sleep=${sleepSec}s`);
+        },
         disable: () => { state.enabled = false; stopIdlePoll(); stopFrameLoop(); },
         enable: () => { state.enabled = true; startIdlePoll(); startFrameLoop(); },
       };
