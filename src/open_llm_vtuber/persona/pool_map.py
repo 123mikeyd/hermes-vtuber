@@ -31,8 +31,9 @@ from typing import Dict, List, Optional
 from loguru import logger
 
 
-# The four mood quadrants plus the special "listening" group.
-POOL_KEYS = ("calm", "tired", "excited", "focused", "listening")
+# The four mood quadrants, the listening pool, and Phase 6 sleep/transition pools.
+POOL_KEYS = ("calm", "tired", "excited", "focused", "listening",
+             "sleep", "falling_asleep", "waking_up")
 
 
 @dataclass
@@ -45,11 +46,17 @@ class PoolMap:
     """
 
     model_name: str
-    calm:      List[str] = field(default_factory=list)
-    tired:     List[str] = field(default_factory=list)
-    excited:   List[str] = field(default_factory=list)
-    focused:   List[str] = field(default_factory=list)
-    listening: List[str] = field(default_factory=list)
+    calm:           List[str] = field(default_factory=list)
+    tired:          List[str] = field(default_factory=list)
+    excited:        List[str] = field(default_factory=list)
+    focused:        List[str] = field(default_factory=list)
+    listening:      List[str] = field(default_factory=list)
+    # Phase 6 — sleep states. `sleep` is the looping deep-sleep motion;
+    # `falling_asleep` and `waking_up` are single-shot transitions the
+    # sidecar plays once when crossing the sleep boundary.
+    sleep:          List[str] = field(default_factory=list)
+    falling_asleep: List[str] = field(default_factory=list)
+    waking_up:      List[str] = field(default_factory=list)
 
     def get(self, quadrant: str) -> List[str]:
         """Lookup with graceful fallback.
@@ -140,16 +147,27 @@ def get_pool_for_model(model_name: str) -> Optional[PoolMap]:
 HERMES_DARK_POOL = PoolMap(
     model_name="hermes_dark",
     calm=[
-        # Phase 4.5 — new warm calm motion leads the pool so the
-        # visible baseline smile reads first
+        # Phase 6 — idle_wait is the most common background state
+        # (16s, very subtle — breathing + blinking + tiny drift).
+        # Lead the list so it plays first on quadrant entry.
+        "motion/idle_wait.motion3.json",
+        # Phase 4.5 warm baseline
         "motion/idle_calm_warm.motion3.json",
+        # Phase 6 variety motions (short to long)
+        "motion/idle_desk_check.motion3.json",     #  3s  quick notebook glance
+        "motion/idle_look_around.motion3.json",    #  5s  people-watching
+        "motion/idle_soft_stretch.motion3.json",   #  7s  stretch (tech-bro nag)
+        "motion/idle_desk_rock.motion3.json",      #  9s  rummaging gag
+        "motion/idle_hair_fidget.motion3.json",    # 12s  hand to hair
+        # Legacy / fallbacks
         "motion/idle_arms_down.motion3.json",
         "motion/idle_calm.motion3.json",
         "motion/look_aside.motion3.json",
     ],
     tired=[
         # Phase 4.5 — new slump motion leads, followed by the
-        # placeholder droop and the creeper fallback
+        # placeholder droop and the creeper fallback. These also serve
+        # as the pre-sleep drowsy pool per Phase 6 design.
         "motion/idle_tired_slump.motion3.json",
         "motion/creeper_!.motion3.json",
         "motion/idle_tired_droop.motion3.json",
@@ -171,6 +189,18 @@ HERMES_DARK_POOL = PoolMap(
     listening=[
         "motion/Wonder.motion3.json",
         "motion/Wonder_full.motion3.json",
+    ],
+    # Phase 6 — sleep state pools. Sidecar plays `falling_asleep` once
+    # when entering sleep, loops `sleep` until woken, then plays
+    # `waking_up` once on wake.
+    sleep=[
+        "motion/sleep_head_down.motion3.json",
+    ],
+    falling_asleep=[
+        "motion/falling_asleep.motion3.json",
+    ],
+    waking_up=[
+        "motion/waking_up.motion3.json",
     ],
 )
 register_pool(HERMES_DARK_POOL)
