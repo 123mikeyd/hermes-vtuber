@@ -160,20 +160,31 @@
   /**
    * Called whenever the server proves Nova is being interacted with.
    * Resets inactivity timer. If she was asleep/drowsy, queue waking_up.
+   *
+   * Phase 6 fix (Apr 17, 2026): do NOT clear manualSleep here. The
+   * sleep command path is:
+   *   user says "go to sleep" -> sleep_command WS fires AND Nova
+   *   acknowledges verbally, which triggers expression_blend, which
+   *   calls markActive(). If markActive cleared manualSleep, the
+   *   sleep command would be instantly cancelled. manualSleep only
+   *   clears on real conversational input AFTER the sleep started
+   *   (the wake transition handles that via its own logic).
    */
   function markActive() {
     state.lastActivityMs = performance.now();
-    state.manualSleep = false;
+    // Don't touch manualSleep here — let the sleep cycle complete
     const phase = state.sleepPhase;
     if (phase === 'asleep' || phase === 'falling') {
       log(`activity resumed during ${phase} → waking_up`);
       state.sleepPhase = 'waking';
       state.pendingTransition = 'waking_up';
       state.wakingStartedMs = performance.now();
+      state.manualSleep = false;  // only clear when actually waking from sleep
     } else if (phase === 'drowsy' || phase === 'tired') {
       // Not asleep yet — just snap back to awake without a wake animation
       log(`activity resumed during ${phase} → awake (no wake anim needed)`);
       state.sleepPhase = 'awake';
+      state.manualSleep = false;
     }
   }
 
