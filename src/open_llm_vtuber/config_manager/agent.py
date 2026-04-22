@@ -4,7 +4,7 @@ different types of agents.
 """
 
 from pydantic import BaseModel, Field
-from typing import Dict, ClassVar, Optional, Literal, List
+from typing import Dict, ClassVar, Optional, Literal, List, Any
 from .i18n import I18nMixin, Description
 from .stateless_llm import StatelessLLMConfigs
 
@@ -172,6 +172,30 @@ class HermesAgentConfig(I18nMixin, BaseModel):
     model: str = Field("", alias="model")
     timeout: int = Field(120, alias="timeout")
 
+    # Phase 2a — persona memory layer (all optional).
+    # Two ways to supply an identity:
+    #   1. persona_v2_identity_path: path to a YAML file (preferred)
+    #   2. persona_v2_identity: inline dict with the same schema
+    # Leave both unset to disable persona v2 and use the classic system
+    # prompt path — full backward compatibility.
+    persona_v2_identity_path: Optional[str] = Field(
+        None, alias="persona_v2_identity_path"
+    )
+    persona_v2_identity: Optional[Dict[str, Any]] = Field(
+        None, alias="persona_v2_identity"
+    )
+    # Where session memory (turns + rolling summary) persists between
+    # server restarts. Relative paths resolve under chat_history/.
+    # Default: chat_history/persona_sessions/<character>.json
+    persona_v2_memory_path: Optional[str] = Field(
+        None, alias="persona_v2_memory_path"
+    )
+    # Composer total budget in estimated tokens. Override for bigger
+    # context models; default 2500 fits 8k-context comfortably.
+    persona_v2_budget_tokens: int = Field(
+        2500, alias="persona_v2_budget_tokens"
+    )
+
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
         "hermes_path": Description(
             en="Path to hermes CLI binary"
@@ -181,6 +205,18 @@ class HermesAgentConfig(I18nMixin, BaseModel):
         ),
         "timeout": Description(
             en="Timeout in seconds for hermes response (default: 120)"
+        ),
+        "persona_v2_identity_path": Description(
+            en="Path to a Tier-1 persona YAML (characters/_persona_schema.yaml for reference). Enables persona v2 memory layer."
+        ),
+        "persona_v2_identity": Description(
+            en="Inline persona identity dict. Alternative to persona_v2_identity_path."
+        ),
+        "persona_v2_memory_path": Description(
+            en="Where session memory persists (default: chat_history/persona_sessions/<character>.json)"
+        ),
+        "persona_v2_budget_tokens": Description(
+            en="Composer total token budget for the system prompt (default: 2500)"
         ),
     }
 

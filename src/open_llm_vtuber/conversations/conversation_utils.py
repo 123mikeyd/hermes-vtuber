@@ -102,6 +102,25 @@ async def handle_sentence_output(
             logger.debug("🚫 No translation engine available. Skipping translation.")
 
         full_response += display_text.text
+
+        # Phase 5: per-sentence affect inference. Build the
+        # expression_blend message and ship it BEFORE TTS speaks the
+        # sentence so the frontend can begin the parameter
+        # interpolation while the audio is still synthesizing.
+        # Best-effort — wrapped so a classifier hiccup never
+        # blocks the actual speech.
+        try:
+            from ..persona import build_expression_message
+            blend_msg = build_expression_message(tts_text, valence=None)
+            if blend_msg.get("blend") and any(blend_msg["blend"].values()):
+                await websocket_send(json.dumps(blend_msg))
+                logger.debug(
+                    f"expression_blend sent: {blend_msg['blend']} "
+                    f"(reason: {blend_msg['reason']})"
+                )
+        except Exception as _exp_err:
+            logger.warning(f"expression_blend send failed (non-fatal): {_exp_err}")
+
         await tts_manager.speak(
             tts_text=tts_text,
             display_text=display_text,

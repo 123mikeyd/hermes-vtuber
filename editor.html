@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live2D Model Editor</title>
+<style>
+:root {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface2: #1a2236;
+  --border: #2a3654;
+  --text: #e2e8f0;
+  --text-dim: #8892a8;
+  --accent: #2050C0;
+  --accent-bright: #3b82f6;
+  --accent-glow: rgba(32, 80, 192, 0.3);
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warn: #f59e0b;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Courier New', monospace;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Header ===== */
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+header h1 {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--accent-bright);
+}
+
+.model-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.status-bar {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.status-bar .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: var(--danger);
+}
+
+.status-bar .dot.ready { background: var(--success); }
+.status-bar .dot.loading { background: var(--warn); }
+
+/* ===== Tabs ===== */
+.tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-dim);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab:hover { color: var(--text); background: var(--surface2); }
+.tab.active {
+  color: var(--accent-bright);
+  border-bottom-color: var(--accent-bright);
+  background: var(--surface2);
+}
+
+.tab.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ===== Main layout ===== */
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===== Canvas area ===== */
+.canvas-wrap {
+  flex: 1;
+  position: relative;
+  background: #080c14;
+  overflow: hidden;
+}
+
+#live2d-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-info {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.canvas-controls {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+}
+
+.canvas-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.canvas-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* ===== Sidebar (sliders) ===== */
+.sidebar {
+  width: 380px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sidebar-header h3 {
+  font-size: 13px;
+  color: var(--accent-bright);
+  flex-shrink: 0;
+}
+
+.sidebar-search {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.sidebar-search:focus { border-color: var(--accent-bright); }
+
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.sidebar-body::-webkit-scrollbar { width: 6px; }
+.sidebar-body::-webkit-scrollbar-track { background: transparent; }
+.sidebar-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ===== Parameter groups ===== */
+.param-group {
+  margin-bottom: 2px;
+}
+
+.param-group-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.param-group-header:hover { background: var(--surface2); }
+
+.param-group-header .arrow {
+  margin-right: 8px;
+  transition: transform 0.2s;
+  font-size: 10px;
+  display: inline-block;
+}
+
+.param-group-header.collapsed .arrow { transform: rotate(-90deg); }
+
+.param-group-body {
+  padding: 0 14px;
+}
+
+.param-group-body.hidden { display: none; }
+
+/* ===== Individual slider ===== */
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.param-label {
+  width: 130px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  cursor: help;
+}
+
+.param-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface2);
+  outline: none;
+  cursor: pointer;
+}
+
+.param-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+}
+
+.param-slider::-webkit-slider-thumb:hover {
+  background: #60a5fa;
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+.param-slider.modified::-webkit-slider-thumb {
+  background: var(--warn);
+}
+
+.param-value {
+  width: 50px;
+  font-size: 11px;
+  color: var(--text);
+  text-align: right;
+  font-family: inherit;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 2px 4px;
+  border-radius: 3px;
+  outline: none;
+}
+
+.param-value:focus { border-color: var(--accent-bright); }
+
+/* ===== Bottom bar (save controls) ===== */
+.bottom-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.save-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  flex: 1;
+  outline: none;
+}
+
+.save-input:focus { border-color: var(--accent-bright); }
+
+.btn {
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.btn-primary:hover { background: var(--accent-bright); }
+
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.btn-secondary:hover { background: #253050; }
+
+/* ===== Motion group selector ===== */
+.motion-group-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ===== Motions panel (collapsible) ===== */
+.motions-panel {
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.motions-panel::-webkit-scrollbar { width: 6px; }
+.motions-panel::-webkit-scrollbar-track { background: transparent; }
+.motions-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.motions-panel-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  position: sticky;
+  top: 0;
+}
+
+.motions-panel-header:hover { color: var(--text); }
+
+.motion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.motion-item:hover { background: var(--surface2); }
+
+.motion-item .group-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+.motion-item .group-badge.idle { color: var(--success); border-color: var(--success); }
+.motion-item .group-badge.tapbody { color: var(--warn); border-color: var(--warn); }
+
+/* ===== Sequencer (keyframe timeline) ===== */
+.sequencer {
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+
+.sequencer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.sequencer-header h4 {
+  font-size: 12px;
+  color: var(--accent-bright);
+  font-weight: bold;
+}
+
+.sequencer-header .count {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.seq-btn {
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  background: var(--surface2);
+  color: var(--text-dim);
+  transition: all 0.15s;
+}
+
+.seq-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+.seq-btn.stamp {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: bold;
+}
+
+.seq-btn.stamp:hover { background: var(--accent-bright); }
+
+.sequencer-timeline {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px;
+  overflow-x: auto;
+  min-height: 50px;
+  align-items: center;
+}
+
+.sequencer-timeline:empty::after {
+  content: "Click ⊕ STAMP to capture current pose as a keyframe";
+  color: var(--text-dim);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.seq-keyframe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  min-width: 52px;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.seq-keyframe:hover { border-color: var(--accent-bright); }
+.seq-keyframe.active { border-color: var(--accent-bright); background: rgba(32, 80, 192, 0.15); }
+
+.seq-keyframe .time {
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--accent-bright);
+}
+
+.seq-keyframe .label {
+  font-size: 10px;
+  color: var(--text-dim);
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seq-keyframe .remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: white;
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  cursor: pointer;
+  display: none;
+}
+
+.seq-keyframe:hover .remove { display: block; }
+
+.seq-arrow {
+  color: var(--text-dim);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.seq-time-input {
+  width: 36px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent-bright);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  text-align: center;
+  outline: none;
+  padding: 0;
+}
+
+.seq-time-input:focus { border-bottom-color: var(--accent-bright); }
+
+/* ===== Toast messages ===== */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  z-index: 1000;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.toast.success { background: #065f46; color: #a7f3d0; border: 1px solid #22c55e; }
+.toast.error { background: #7f1d1d; color: #fca5a5; border: 1px solid #ef4444; }
+.toast.info { background: #1e3a5f; color: #93c5fd; border: 1px solid #3b82f6; }
+
+/* ===== Loading overlay ===== */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 14, 23, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 50;
+  font-size: 14px;
+}
+
+.loading-overlay .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent-bright);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header>
+  <h1>&#x2726; Live2D Editor</h1>
+  <select id="model-select" class="model-select">
+    <option value="">Loading models...</option>
+  </select>
+  <div class="status-bar">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">Initializing...</span>
+  </div>
+</header>
+
+<!-- ===== Tabs ===== -->
+<div class="tabs">
+  <button class="tab active" data-tab="pose">&#x25B6; Pose Studio</button>
+  <button class="tab disabled" data-tab="texture">&#x1F3A8; Texture (Phase 2)</button>
+  <button class="tab disabled" data-tab="bg">&#x1F5BC; Background (Phase 3)</button>
+</div>
+
+<!-- ===== Main ===== -->
+<div class="main">
+
+  <!-- Canvas -->
+  <div class="canvas-wrap" id="canvas-wrap">
+    <canvas id="live2d-canvas"></canvas>
+    <div class="canvas-info" id="canvas-info">No model</div>
+    <div class="canvas-controls">
+      <button class="canvas-btn" id="btn-reset" title="Reset all parameters to defaults">Reset</button>
+      <button class="canvas-btn" id="btn-pause" title="Pause/resume auto motions to control sliders freely">&#x23F8; Pause Motions</button>
+    </div>
+    <div class="loading-overlay" id="loading" style="display: none;">
+      <div class="spinner"></div>
+      <div id="loading-text">Loading model...</div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h3>Parameters</h3>
+      <input type="text" class="sidebar-search" id="param-search" placeholder="Filter...">
+    </div>
+
+    <div class="sidebar-body" id="param-list">
+      <div style="padding: 20px 14px; color: var(--text-dim); font-size: 13px;">
+        Select a model to load parameters
+      </div>
+    </div>
+
+    <!-- Sequencer (keyframe timeline) -->
+    <div class="sequencer" id="sequencer">
+      <div class="sequencer-header">
+        <h4>&#x23F1; Sequencer</h4>
+        <span class="count" id="seq-count">0 keyframes</span>
+        <div style="margin-left:auto; display:flex; gap:4px;">
+          <button class="seq-btn stamp" id="seq-stamp" title="Capture current slider values as a keyframe">&#x2295; STAMP</button>
+          <button class="seq-btn" id="seq-preview" title="Play back the sequence on the model">&#x25B6; Preview</button>
+          <button class="seq-btn" id="seq-clear" title="Clear all keyframes">Clear</button>
+        </div>
+      </div>
+      <div class="sequencer-timeline" id="seq-timeline"></div>
+    </div>
+
+    <!-- Existing motions list -->
+    <div class="motions-panel" id="motions-panel" style="display: none;">
+      <div class="motions-panel-header" id="motions-toggle">
+        &#x25BC; Saved Motions <span id="motions-count" style="opacity:0.6"></span>
+      </div>
+      <div id="motions-list"></div>
+    </div>
+
+    <!-- Save bar -->
+    <div class="bottom-bar">
+      <input type="text" class="save-input" id="save-filename" placeholder="my_pose">
+      <select class="motion-group-select" id="save-group">
+        <option value="Idle">+ Idle</option>
+        <option value="TapBody">+ Speaking</option>
+        <option value="">File Only</option>
+      </select>
+      <button class="btn btn-primary" id="btn-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- 
+  Load order matters:
+  1. Live2D Cubism Core (provides Live2DCubismCore global)
+  2. PIXI.js v7 (provides PIXI global)
+  3. pixi-live2d-display (adds PIXI.live2d namespace using both)
+-->
+<script src="/frontend/libs/live2dcubismcore.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
+
+<script>
+// ============================================================
+//  Live2D Model Editor — Pose Studio
+// ============================================================
+
+const API = '';  // same origin
+
+// State
+let currentModel = null;
+let modelInfo = null;
+let pixiApp = null;
+let live2dModel = null;
+let motionsPaused = false;
+let paramDefaults = {};   // {paramId: {min, max, default, index}}
+let paramSliders = {};    // {paramId: {slider, valueEl, min, max, default}}
+let overrideValues = {};  // When paused, these values get forced each frame
+
+// ============================================================
+//  Init
+// ============================================================
+
+async function init() {
+  try {
+    const resp = await fetch(`${API}/api/models`);
+    const data = await resp.json();
+    const select = document.getElementById('model-select');
+    select.innerHTML = '<option value="">-- Select Model --</option>';
+    for (const m of data.models) {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      select.appendChild(opt);
+    }
+    select.addEventListener('change', () => {
+      if (select.value) loadModel(select.value);
+    });
+
+    // Wire up buttons
+    document.getElementById('btn-save').addEventListener('click', saveMotion);
+    document.getElementById('btn-reset').addEventListener('click', resetParams);
+    document.getElementById('btn-pause').addEventListener('click', togglePause);
+    document.getElementById('param-search').addEventListener('input', filterParams);
+
+    // Tabs (only pose active)
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        if (!tab.classList.contains('disabled')) {
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+        }
+      });
+    });
+
+    setStatus('idle', 'Select a model');
+
+    // Auto-select hermes_dark
+    if (data.models.some(m => m.name === 'hermes_dark')) {
+      select.value = 'hermes_dark';
+      loadModel('hermes_dark');
+    }
+  } catch (err) {
+    setStatus('error', 'Backend unreachable');
+    toast('Cannot reach editor backend at ' + window.location.origin, 'error');
+  }
+}
+
+// ============================================================
+//  Load Model
+// ============================================================
+
+async function loadModel(name) {
+  const loading = document.getElementById('loading');
+  const loadingText = document.getElementById('loading-text');
+  loading.style.display = 'flex';
+  loadingText.textContent = `Loading ${name}...`;
+  setStatus('loading', `Loading ${name}...`);
+
+  try {
+    // Fetch model info from our backend
+    const resp = await fetch(`${API}/api/model/${name}/info`);
+    modelInfo = await resp.json();
+    currentModel = name;
+
+    // Tear down previous
+    if (live2dModel) {
+      pixiApp.stage.removeChild(live2dModel);
+      live2dModel.destroy();
+      live2dModel = null;
+    }
+    if (pixiApp) {
+      pixiApp.destroy(true, { children: true });
+      pixiApp = null;
+    }
+
+    // Create PIXI app
+    const wrap = document.getElementById('canvas-wrap');
+    const canvas = document.getElementById('live2d-canvas');
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+
+    pixiApp = new PIXI.Application({
+      view: canvas,
+      width: canvas.width,
+      height: canvas.height,
+      backgroundColor: 0x080c14,
+      autoStart: true,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
+    });
+
+    loadingText.textContent = 'Loading Live2D model...';
+
+    // Load model via pixi-live2d-display
+    const modelUrl = window.location.origin + modelInfo.model3_path;
+    live2dModel = await PIXI.live2d.Live2DModel.from(modelUrl, {
+      autoInteract: false,
+      autoUpdate: true,
+    });
+
+    // Scale to fit canvas
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const scale = Math.min(
+      (cw * 0.8) / live2dModel.width,
+      (ch * 0.85) / live2dModel.height
+    );
+    live2dModel.scale.set(scale);
+    live2dModel.x = cw / 2;
+    live2dModel.y = ch * 0.55;
+    live2dModel.anchor.set(0.5, 0.5);
+
+    pixiApp.stage.addChild(live2dModel);
+
+    // Read parameter info from the loaded Cubism core model
+    loadingText.textContent = 'Reading parameters...';
+    readModelParams();
+
+    // Build UI
+    buildParamSliders();
+    buildMotionsList();
+
+    // Install our frame update hook for override mode
+    pixiApp.ticker.add(frameUpdate);
+
+    // Canvas info
+    document.getElementById('canvas-info').textContent =
+      `${name} | ${Object.keys(paramDefaults).length} params | ${modelInfo.textures.length} textures`;
+
+    setStatus('ready', `${name}`);
+    toast(`${name} loaded — ${Object.keys(paramDefaults).length} parameters`, 'success');
+
+  } catch (err) {
+    console.error('Load failed:', err);
+    setStatus('error', `Failed: ${err.message}`);
+    toast(`Error: ${err.message}`, 'error');
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
+function readModelParams() {
+  paramDefaults = {};
+  const coreModel = live2dModel.internalModel.coreModel;
+  const count = coreModel.getParameterCount();
+
+  // The raw Live2DCubismCore.Model is inside coreModel._model
+  // It has .parameters.ids (string array), .parameters.minimumValues, etc.
+  const rawModel = coreModel.getModel();
+  const ids = rawModel.parameters.ids;
+
+  for (let i = 0; i < count; i++) {
+    paramDefaults[ids[i]] = {
+      min: coreModel.getParameterMinimumValue(i),
+      max: coreModel.getParameterMaximumValue(i),
+      default: coreModel.getParameterDefaultValue(i),
+      index: i,
+    };
+  }
+}
+
+// ============================================================
+//  Frame Update — enforce slider overrides when paused
+// ============================================================
+
+function frameUpdate() {
+  if (!motionsPaused || !live2dModel) return;
+  const coreModel = live2dModel.internalModel.coreModel;
+  for (const [paramId, val] of Object.entries(overrideValues)) {
+    coreModel.setParameterValueById(paramId, val);
+  }
+}
+
+// ============================================================
+//  Build Sliders
+// ============================================================
+
+function buildParamSliders() {
+  const container = document.getElementById('param-list');
+  container.innerHTML = '';
+  paramSliders = {};
+  overrideValues = {};
+
+  // Categorize
+  const groups = new Map();
+  const addToGroup = (name, id) => {
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(id);
+  };
+
+  for (const id of Object.keys(paramDefaults)) {
+    const u = id.toUpperCase();
+    if (u.includes('ANGLE') || u === 'PARAM_DESK') addToGroup('Head', id);
+    else if (u.includes('EYE')) addToGroup('Eyes', id);
+    else if (u.includes('BROW')) addToGroup('Brows', id);
+    else if (u.includes('MOUTH')) addToGroup('Mouth', id);
+    else if (u.includes('BODY') || u.includes('BREATH')) addToGroup('Body', id);
+    else if (u.includes('ARM_02') || u.includes('HAND_02')) addToGroup('Arms (B-layer)', id);
+    else if (u.includes('ARM') || u.includes('HAND')) addToGroup('Arms (A-layer)', id);
+    else if (u.includes('KAMIYURE')) addToGroup('Hair Physics', id);
+    else if (u.includes('TERE') || u.includes('DONYORI')) addToGroup('Effects', id);
+    else addToGroup('Other', id);
+  }
+
+  // Also detect arm parts for PartOpacity sliders
+  const armParts = getArmPartIds();
+  if (armParts.length > 0) {
+    addToGroup('Part Visibility', ...armParts.map(p => `part:${p}`));
+  }
+
+  for (const [groupName, paramIds] of groups) {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'param-group';
+    groupDiv.setAttribute('data-group', groupName);
+
+    const header = document.createElement('div');
+    header.className = 'param-group-header';
+    header.innerHTML = `<span class="arrow">&#x25BC;</span> ${groupName} <span style="opacity:0.4;margin-left:4px">(${paramIds.length})</span>`;
+
+    const body = document.createElement('div');
+    body.className = 'param-group-body';
+
+    header.addEventListener('click', () => {
+      header.classList.toggle('collapsed');
+      body.classList.toggle('hidden');
+    });
+
+    for (const id of paramIds) {
+      if (id.startsWith('part:')) {
+        body.appendChild(createPartSliderRow(id.replace('part:', '')));
+      } else {
+        body.appendChild(createSliderRow(id));
+      }
+    }
+
+    groupDiv.appendChild(header);
+    groupDiv.appendChild(body);
+    container.appendChild(groupDiv);
+  }
+}
+
+function getArmPartIds() {
+  if (!live2dModel) return [];
+  const coreModel = live2dModel.internalModel.coreModel;
+  const rawModel = coreModel.getModel();
+  const ids = rawModel.parts.ids;
+  const parts = [];
+  for (let i = 0; i < ids.length; i++) {
+    if (ids[i].toUpperCase().includes('ARM')) parts.push(ids[i]);
+  }
+  return parts;
+}
+
+function createSliderRow(paramId) {
+  const info = paramDefaults[paramId] || { min: -1, max: 1, default: 0 };
+  const cdiName = (modelInfo.parameters || {})[paramId] || '';
+  const shortName = paramId
+    .replace('PARAM_', '')
+    .replace(/_/g, ' ')
+    .replace(/\b0(\d)/g, '$1');
+
+  const row = document.createElement('div');
+  row.className = 'param-row';
+  row.setAttribute('data-param', paramId);
+
+  const label = document.createElement('span');
+  label.className = 'param-label';
+  label.textContent = shortName;
+  label.title = `${paramId}\n${cdiName}\nRange: [${info.min}, ${info.max}] Default: ${info.default}`;
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.className = 'param-slider';
+  slider.min = info.min;
+  slider.max = info.max;
+  slider.step = ((info.max - info.min) / 200).toFixed(4);  // 200 steps
+  slider.value = info.default;
+
+  const valueInput = document.createElement('input');
+  valueInput.type = 'text';
+  valueInput.className = 'param-value';
+  valueInput.value = info.default.toFixed(2);
+
+  const setParam = (val) => {
+    const clamped = Math.max(info.min, Math.min(info.max, val));
+    slider.value = clamped;
+    valueInput.value = clamped.toFixed(2);
+    overrideValues[paramId] = clamped;
+    // Mark as modified if different from default
+    const isModified = Math.abs(clamped - info.default) > 0.01;
+    slider.classList.toggle('modified', isModified);
+    // Direct set for immediate feedback
+    if (live2dModel) {
+      live2dModel.internalModel.coreModel.setParameterValueById(paramId, clamped);
+    }
+  };
+
+  slider.addEventListener('input', () => setParam(parseFloat(slider.value)));
+  valueInput.addEventListener('change', () => {
+    const v = parseFloat(valueInput.value);
+    if (!isNaN(v)) setParam(v);
+  });
+
+  // Double-click label to reset to default
+  label.addEventListener('dblclick', () => {
+    setParam(info.default);
+    toast(`${shortName} → ${info.default.toFixed(2)}`, 'info');
+  });
+
+  row.appendChild(label);
+  row.appendChild(slider);
+  row.appendChild(valueInput);
+
+  paramSliders[paramId] = { slider, valueEl: valueInput, min: info.min, max: info.max, default: info.default };
+  overrideValues[paramId] = info.default;
+
+  return row;
+}
+
+function createPartSliderRow(partId) {
+  const row = document.createElement('div');
+  row.className = 'param-row';
+  row.setAttribute('data-param', `part:${partId}`);
+
+  const label = document.createElement('span');
+  label.className = 'param-label';
+  label.textContent = partId.replace('PARTS_01_', '').replace(/_/g, ' ');
+  label.title = `${partId} (PartOpacity)\n0 = hidden, 1 = visible`;
+
+  const currentOpacity = getPartOpacity(partId);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.className = 'param-slider';
+  slider.min = 0;
+  slider.max = 1;
+  slider.step = 0.01;
+  slider.value = currentOpacity;
+
+  const valueInput = document.createElement('input');
+  valueInput.type = 'text';
+  valueInput.className = 'param-value';
+  valueInput.value = currentOpacity.toFixed(2);
+
+  const setVal = (val) => {
+    const v = Math.max(0, Math.min(1, val));
+    slider.value = v;
+    valueInput.value = v.toFixed(2);
+    setPartOpacity(partId, v);
+  };
+
+  slider.addEventListener('input', () => setVal(parseFloat(slider.value)));
+  valueInput.addEventListener('change', () => {
+    const v = parseFloat(valueInput.value);
+    if (!isNaN(v)) setVal(v);
+  });
+
+  row.appendChild(label);
+  row.appendChild(slider);
+  row.appendChild(valueInput);
+
+  paramSliders[`part:${partId}`] = { slider, valueEl: valueInput, min: 0, max: 1, default: currentOpacity };
+
+  return row;
+}
+
+// ============================================================
+//  Part Opacity helpers
+// ============================================================
+
+function setPartOpacity(partId, value) {
+  if (!live2dModel) return;
+  const coreModel = live2dModel.internalModel.coreModel;
+  const idx = coreModel.getPartIndex(partId);
+  if (idx >= 0) coreModel.setPartOpacityByIndex(idx, value);
+}
+
+function getPartOpacity(partId) {
+  if (!live2dModel) return 0;
+  const coreModel = live2dModel.internalModel.coreModel;
+  const idx = coreModel.getPartIndex(partId);
+  return idx >= 0 ? coreModel.getPartOpacityByIndex(idx) : 0;
+}
+
+// ============================================================
+//  Controls
+// ============================================================
+
+function resetParams() {
+  if (!live2dModel) return;
+  for (const [paramId, info] of Object.entries(paramDefaults)) {
+    overrideValues[paramId] = info.default;
+    if (paramSliders[paramId]) {
+      paramSliders[paramId].slider.value = info.default;
+      paramSliders[paramId].valueEl.value = info.default.toFixed(2);
+      paramSliders[paramId].slider.classList.remove('modified');
+    }
+  }
+  toast('Reset to defaults', 'info');
+}
+
+function togglePause() {
+  motionsPaused = !motionsPaused;
+  const btn = document.getElementById('btn-pause');
+
+  if (motionsPaused) {
+    // Stop all motions so sliders have full control
+    if (live2dModel && live2dModel.internalModel.motionManager) {
+      live2dModel.internalModel.motionManager.stopAllMotions();
+    }
+    btn.innerHTML = '&#x25B6; Resume Motions';
+    btn.style.borderColor = 'var(--warn)';
+    btn.style.color = 'var(--warn)';
+
+    // Capture current param values into overrides
+    const coreModel = live2dModel.internalModel.coreModel;
+    const values = coreModel.getParameterValues();
+    for (const [paramId, info] of Object.entries(paramDefaults)) {
+      const current = values[info.index];
+      overrideValues[paramId] = current;
+      if (paramSliders[paramId]) {
+        paramSliders[paramId].slider.value = current;
+        paramSliders[paramId].valueEl.value = current.toFixed(2);
+        const isModified = Math.abs(current - info.default) > 0.01;
+        paramSliders[paramId].slider.classList.toggle('modified', isModified);
+      }
+    }
+
+    toast('Motions paused — sliders have full control', 'info');
+  } else {
+    btn.innerHTML = '&#x23F8; Pause Motions';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    toast('Motions resumed', 'info');
+  }
+}
+
+function filterParams() {
+  const query = document.getElementById('param-search').value.toLowerCase();
+  document.querySelectorAll('.param-row').forEach(row => {
+    const param = (row.getAttribute('data-param') || '').toLowerCase();
+    const label = (row.querySelector('.param-label')?.textContent || '').toLowerCase();
+    row.style.display = (!query || param.includes(query) || label.includes(query)) ? '' : 'none';
+  });
+  document.querySelectorAll('.param-group').forEach(group => {
+    const visible = group.querySelectorAll('.param-row:not([style*="display: none"])');
+    group.style.display = visible.length > 0 ? '' : 'none';
+  });
+}
+
+// ============================================================
+//  Motions List
+// ============================================================
+
+function buildMotionsList() {
+  const panel = document.getElementById('motions-panel');
+  const list = document.getElementById('motions-list');
+  const count = document.getElementById('motions-count');
+  list.innerHTML = '';
+
+  if (!modelInfo?.motions) { panel.style.display = 'none'; return; }
+
+  let total = 0;
+  for (const [group, items] of Object.entries(modelInfo.motions)) {
+    for (const item of items) {
+      total++;
+      const div = document.createElement('div');
+      div.className = 'motion-item';
+      const fileName = item.file.replace('motion/', '').replace('.motion3.json', '');
+      div.innerHTML = `
+        <span class="group-badge ${group.toLowerCase()}">${group === 'TapBody' ? 'Speak' : group}</span>
+        <span>${fileName}</span>
+        <span style="color:var(--text-dim);margin-left:auto;font-size:11px">${item.duration.toFixed(1)}s${item.loop ? ' ⟳' : ''} · ${item.curveCount} curves</span>
+      `;
+      div.addEventListener('click', () => loadMotionIntoSliders(item.file));
+      list.appendChild(div);
+    }
+  }
+
+  count.textContent = `(${total})`;
+  panel.style.display = total > 0 ? '' : 'none';
+
+  document.getElementById('motions-toggle').onclick = () => {
+    list.style.display = list.style.display === 'none' ? '' : 'none';
+  };
+}
+
+async function loadMotionIntoSliders(motionFile) {
+  try {
+    const resp = await fetch(`${API}/api/model/${currentModel}/motion/${motionFile}`);
+    const motion = await resp.json();
+
+    // Auto-pause so sliders take control
+    if (!motionsPaused) togglePause();
+
+    // Reset all to defaults first
+    for (const [paramId, info] of Object.entries(paramDefaults)) {
+      overrideValues[paramId] = info.default;
+      if (paramSliders[paramId]) {
+        paramSliders[paramId].slider.value = info.default;
+        paramSliders[paramId].valueEl.value = info.default.toFixed(2);
+        paramSliders[paramId].slider.classList.remove('modified');
+      }
+    }
+
+    // Apply first keyframe values from the motion
+    for (const curve of motion.Curves || []) {
+      const id = curve.Id;
+      const segs = curve.Segments;
+      if (segs.length < 2) continue;
+      const firstVal = segs[1]; // index 0 = time, index 1 = value
+
+      if (curve.Target === 'Parameter' && paramSliders[id]) {
+        overrideValues[id] = firstVal;
+        paramSliders[id].slider.value = firstVal;
+        paramSliders[id].valueEl.value = firstVal.toFixed(2);
+        const isModified = Math.abs(firstVal - (paramDefaults[id]?.default || 0)) > 0.01;
+        paramSliders[id].slider.classList.toggle('modified', isModified);
+      } else if (curve.Target === 'PartOpacity' && paramSliders[`part:${id}`]) {
+        paramSliders[`part:${id}`].slider.value = firstVal;
+        paramSliders[`part:${id}`].valueEl.value = firstVal.toFixed(2);
+        setPartOpacity(id, firstVal);
+      }
+    }
+
+    // Set filename for saving
+    const shortName = motionFile.replace('motion/', '').replace('.motion3.json', '');
+    document.getElementById('save-filename').value = shortName;
+
+    toast(`Loaded ${shortName}`, 'info');
+  } catch (err) {
+    toast(`Load error: ${err.message}`, 'error');
+  }
+}
+
+// ============================================================
+//  Save Motion
+// ============================================================
+
+async function saveMotion() {
+  if (!currentModel) { toast('No model loaded', 'error'); return; }
+
+  let name = document.getElementById('save-filename').value.trim();
+  if (!name) { toast('Enter a filename', 'error'); return; }
+
+  // Clean up name → path
+  name = name.replace(/\.motion3\.json$/, '');
+  const path = `motion/${name}.motion3.json`;
+
+  // Use sequencer keyframes if available, otherwise capture current sliders
+  let motion;
+  const seqMotion = buildMotionFromSequencer();
+  if (seqMotion) {
+    motion = seqMotion;
+    toast(`Building from ${seqKeyframes.length} keyframes...`, 'info');
+  } else {
+    // Fallback: single pose from current sliders
+    const duration = 10.0;
+  const curves = [];
+
+  // Build curves from current slider values
+  for (const [paramId, slider] of Object.entries(paramSliders)) {
+    if (paramId.startsWith('part:')) {
+      // PartOpacity — static
+      const partId = paramId.replace('part:', '');
+      const val = parseFloat(slider.slider.value);
+      curves.push({
+        Target: 'PartOpacity',
+        Id: partId,
+        Segments: makeBezierStatic(val, duration),
+      });
+    } else {
+      const val = parseFloat(slider.slider.value);
+      const info = paramDefaults[paramId];
+      if (!info) continue;
+
+      // Add subtle drift for organic feel (±1.5% of range)
+      const range = info.max - info.min;
+      const drift = range * 0.015;
+      const v1 = val;
+      const v2 = clamp(val + drift, info.min, info.max);
+      const v3 = clamp(val - drift * 0.7, info.min, info.max);
+
+      curves.push({
+        Target: 'Parameter',
+        Id: paramId,
+        Segments: makeBezierDrift(v1, v2, v3, duration),
+      });
+    }
+  }
+
+  const motion = {
+    Version: 3,
+    Meta: {
+      Duration: duration,
+      Fps: 30.0,
+      Loop: true,
+      AreBeziersRestricted: true,
+      CurveCount: curves.length,
+      TotalSegmentCount: curves.reduce((s, c) => s + c.Segments.length, 0),
+      TotalPointCount: curves.reduce((s, c) => s + c.Segments.length, 0),
+      UserDataCount: 0,
+      TotalUserDataSize: 0,
+    },
+    Curves: curves,
+  };
+
+  } // end else (fallback to current sliders)
+
+  try {
+    const resp = await fetch(`${API}/api/model/${currentModel}/motion/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(motion),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      toast(`Save failed: ${err.detail}`, 'error');
+      return;
+    }
+
+    toast(`Saved ${path}`, 'success');
+
+    // Add to motion group
+    const group = document.getElementById('save-group').value;
+    if (group) {
+      const fadeIn = group === 'Idle' ? 1.5 : 0.5;
+      const fadeOut = group === 'Idle' ? 1.5 : 0.5;
+      await fetch(`${API}/api/model/${currentModel}/motion-group`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group, action: 'add', file: path, fadeIn, fadeOut }),
+      });
+      toast(`Added to ${group}`, 'success');
+    }
+
+    // Refresh motions
+    const infoResp = await fetch(`${API}/api/model/${currentModel}/info`);
+    modelInfo = await infoResp.json();
+    buildMotionsList();
+
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'error');
+  }
+}
+
+// ============================================================
+//  Motion math helpers
+// ============================================================
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+/** Static value held with bezier curves */
+function makeBezierStatic(value, duration) {
+  return [
+    0, value,
+    1, duration * 0.4, value, duration * 0.6, value, duration, value,
+  ];
+}
+
+/** Gentle 3-point drift: v1 → v2 → v3 → v1 with bezier ease */
+function makeBezierDrift(v1, v2, v3, duration) {
+  const t1 = 0;
+  const t2 = duration * 0.33;
+  const t3 = duration * 0.66;
+  const t4 = duration;
+
+  return [
+    t1, v1,
+    // v1 → v2
+    1, t1 + (t2 - t1) * 0.4, v1, t1 + (t2 - t1) * 0.6, v2, t2, v2,
+    // v2 → v3
+    1, t2 + (t3 - t2) * 0.4, v2, t2 + (t3 - t2) * 0.6, v3, t3, v3,
+    // v3 → v1
+    1, t3 + (t4 - t3) * 0.4, v3, t3 + (t4 - t3) * 0.6, v1, t4, v1,
+  ];
+}
+
+// ============================================================
+//  Sequencer — stamp poses, build motions from keyframes
+// ============================================================
+
+let seqKeyframes = [];  // [{time, params: {}, parts: {}, label}]
+let seqPreviewActive = false;
+
+function initSequencer() {
+  document.getElementById('seq-stamp').addEventListener('click', seqStamp);
+  document.getElementById('seq-preview').addEventListener('click', seqPreview);
+  document.getElementById('seq-clear').addEventListener('click', seqClear);
+}
+
+function seqStamp() {
+  if (!live2dModel) { toast('No model loaded', 'error'); return; }
+
+  // Capture current slider values
+  const params = {};
+  const parts = {};
+
+  for (const [paramId, slider] of Object.entries(paramSliders)) {
+    const val = parseFloat(slider.slider.value);
+    if (paramId.startsWith('part:')) {
+      parts[paramId.replace('part:', '')] = val;
+    } else {
+      params[paramId] = val;
+    }
+  }
+
+  // Auto-calculate time: 3s after last keyframe, or 0 for first
+  const time = seqKeyframes.length === 0 ? 0 :
+    seqKeyframes[seqKeyframes.length - 1].time + 3.0;
+
+  // Detect which params differ from defaults to make a label
+  const diffs = [];
+  for (const [pid, val] of Object.entries(params)) {
+    const def = paramDefaults[pid]?.default || 0;
+    if (Math.abs(val - def) > 0.05) {
+      const short = pid.replace('PARAM_', '').substring(0, 8);
+      diffs.push(short);
+    }
+  }
+  const label = diffs.length > 0 ? diffs.slice(0, 3).join(', ') : 'pose';
+
+  seqKeyframes.push({ time, params, parts, label });
+  renderSequencer();
+  toast(`Keyframe ${seqKeyframes.length} stamped at ${time.toFixed(1)}s`, 'success');
+}
+
+function seqRemove(index) {
+  seqKeyframes.splice(index, 1);
+  // Re-calculate times if needed
+  renderSequencer();
+}
+
+function seqClear() {
+  seqKeyframes = [];
+  renderSequencer();
+  toast('Sequencer cleared', 'info');
+}
+
+function seqClickKeyframe(index) {
+  if (!live2dModel) return;
+
+  // Load this keyframe's values into the sliders
+  const kf = seqKeyframes[index];
+  if (!motionsPaused) togglePause();
+
+  for (const [paramId, val] of Object.entries(kf.params)) {
+    if (paramSliders[paramId]) {
+      paramSliders[paramId].slider.value = val;
+      paramSliders[paramId].valueEl.value = val.toFixed(2);
+      overrideValues[paramId] = val;
+      const isModified = Math.abs(val - (paramDefaults[paramId]?.default || 0)) > 0.01;
+      paramSliders[paramId].slider.classList.toggle('modified', isModified);
+    }
+  }
+
+  for (const [partId, val] of Object.entries(kf.parts)) {
+    const key = `part:${partId}`;
+    if (paramSliders[key]) {
+      paramSliders[key].slider.value = val;
+      paramSliders[key].valueEl.value = val.toFixed(2);
+      setPartOpacity(partId, val);
+    }
+  }
+
+  // Highlight active keyframe
+  document.querySelectorAll('.seq-keyframe').forEach((el, i) => {
+    el.classList.toggle('active', i === index);
+  });
+
+  toast(`Loaded keyframe ${index + 1}`, 'info');
+}
+
+function seqUpdateTime(index, newTime) {
+  const t = parseFloat(newTime);
+  if (!isNaN(t) && t >= 0) {
+    seqKeyframes[index].time = t;
+    // Re-sort by time
+    seqKeyframes.sort((a, b) => a.time - b.time);
+    renderSequencer();
+  }
+}
+
+async function seqPreview() {
+  if (!live2dModel || seqKeyframes.length < 2) {
+    toast('Need at least 2 keyframes to preview', 'error');
+    return;
+  }
+
+  if (seqPreviewActive) {
+    seqPreviewActive = false;
+    document.getElementById('seq-preview').innerHTML = '&#x25B6; Preview';
+    return;
+  }
+
+  // Pause motions so we have control
+  if (!motionsPaused) togglePause();
+
+  seqPreviewActive = true;
+  document.getElementById('seq-preview').innerHTML = '&#x23F9; Stop';
+
+  const totalDuration = seqKeyframes[seqKeyframes.length - 1].time;
+  const startTime = performance.now();
+
+  const animate = () => {
+    if (!seqPreviewActive) return;
+
+    const elapsed = (performance.now() - startTime) / 1000;
+    const t = elapsed % (totalDuration + 0.001);  // loop
+
+    // Find the two surrounding keyframes
+    let kfA = seqKeyframes[0];
+    let kfB = seqKeyframes[seqKeyframes.length - 1];
+
+    for (let i = 0; i < seqKeyframes.length - 1; i++) {
+      if (t >= seqKeyframes[i].time && t < seqKeyframes[i + 1].time) {
+        kfA = seqKeyframes[i];
+        kfB = seqKeyframes[i + 1];
+        break;
+      }
+    }
+
+    // Lerp between keyframes
+    const dt = kfB.time - kfA.time;
+    const progress = dt > 0 ? (t - kfA.time) / dt : 0;
+    // Smooth ease-in-out
+    const ease = progress < 0.5 ?
+      2 * progress * progress :
+      1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+    // Apply interpolated values
+    for (const paramId of Object.keys(kfA.params)) {
+      const vA = kfA.params[paramId] || 0;
+      const vB = kfB.params[paramId] !== undefined ? kfB.params[paramId] : vA;
+      const val = vA + (vB - vA) * ease;
+      overrideValues[paramId] = val;
+
+      if (paramSliders[paramId]) {
+        paramSliders[paramId].slider.value = val;
+        paramSliders[paramId].valueEl.value = val.toFixed(2);
+      }
+    }
+
+    requestAnimationFrame(animate);
+  };
+
+  requestAnimationFrame(animate);
+}
+
+function renderSequencer() {
+  const timeline = document.getElementById('seq-timeline');
+  const count = document.getElementById('seq-count');
+  timeline.innerHTML = '';
+  count.textContent = `${seqKeyframes.length} keyframe${seqKeyframes.length !== 1 ? 's' : ''}`;
+
+  seqKeyframes.forEach((kf, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'seq-arrow';
+      arrow.textContent = '→';
+      timeline.appendChild(arrow);
+    }
+
+    const div = document.createElement('div');
+    div.className = 'seq-keyframe';
+    div.addEventListener('click', (e) => {
+      if (e.target.classList.contains('remove')) return;
+      if (e.target.classList.contains('seq-time-input')) return;
+      seqClickKeyframe(i);
+    });
+
+    const timeInput = document.createElement('input');
+    timeInput.type = 'text';
+    timeInput.className = 'seq-time-input';
+    timeInput.value = kf.time.toFixed(1);
+    timeInput.title = 'Time in seconds';
+    timeInput.addEventListener('change', () => seqUpdateTime(i, timeInput.value));
+    timeInput.addEventListener('click', (e) => e.stopPropagation());
+
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = kf.label;
+    label.title = `${Object.keys(kf.params).length} params`;
+
+    const remove = document.createElement('span');
+    remove.className = 'remove';
+    remove.textContent = '×';
+    remove.addEventListener('click', (e) => { e.stopPropagation(); seqRemove(i); });
+
+    div.appendChild(timeInput);
+    div.appendChild(label);
+    div.appendChild(remove);
+    timeline.appendChild(div);
+  });
+}
+
+// Override saveMotion to use sequencer keyframes if present
+function buildMotionFromSequencer() {
+  if (seqKeyframes.length === 0) return null;
+
+  const duration = seqKeyframes.length === 1 ?
+    10.0 :  // Single pose = 10s static
+    seqKeyframes[seqKeyframes.length - 1].time;
+
+  // Collect all param IDs across keyframes
+  const allParams = new Set();
+  const allParts = new Set();
+  for (const kf of seqKeyframes) {
+    Object.keys(kf.params).forEach(p => allParams.add(p));
+    Object.keys(kf.parts).forEach(p => allParts.add(p));
+  }
+
+  const curves = [];
+
+  // Build bezier curves for each parameter
+  for (const paramId of allParams) {
+    // Skip physics-driven params (KAMIYURE)
+    if (paramId.toUpperCase().includes('KAMIYURE')) continue;
+
+    const points = [];
+    for (const kf of seqKeyframes) {
+      if (kf.params[paramId] !== undefined) {
+        points.push([kf.time, kf.params[paramId]]);
+      }
+    }
+
+    if (points.length === 0) continue;
+
+    // Ensure endpoints
+    if (points[0][0] > 0) {
+      points.unshift([0, points[0][1]]);
+    }
+    if (points[points.length - 1][0] < duration) {
+      points.push([duration, points[points.length - 1][1]]);
+    }
+
+    // Build bezier segments
+    const segments = [];
+    for (let i = 0; i < points.length; i++) {
+      const [t, v] = points[i];
+      if (i === 0) {
+        segments.push(round4(t), round6(v));
+      } else {
+        const [pt, pv] = points[i - 1];
+        const dt = t - pt;
+        segments.push(
+          1,  // bezier
+          round4(pt + dt * 0.4), round6(pv),   // cp1
+          round4(pt + dt * 0.6), round6(v),    // cp2
+          round4(t), round6(v),                 // end
+        );
+      }
+    }
+
+    curves.push({ Target: 'Parameter', Id: paramId, Segments: segments });
+  }
+
+  // Part opacity curves (stepped — instant switch)
+  for (const partId of allParts) {
+    const points = [];
+    for (const kf of seqKeyframes) {
+      if (kf.parts[partId] !== undefined) {
+        points.push([kf.time, kf.parts[partId]]);
+      }
+    }
+    if (points.length === 0) continue;
+
+    if (points[0][0] > 0) points.unshift([0, points[0][1]]);
+    if (points[points.length - 1][0] < duration) {
+      points.push([duration, points[points.length - 1][1]]);
+    }
+
+    const segments = [];
+    for (let i = 0; i < points.length; i++) {
+      const [t, v] = points[i];
+      if (i === 0) {
+        segments.push(round4(t), round6(v));
+      } else {
+        segments.push(2, round4(t), round6(v));  // stepped
+      }
+    }
+    curves.push({ Target: 'PartOpacity', Id: partId, Segments: segments });
+  }
+
+  return {
+    Version: 3,
+    Meta: {
+      Duration: round4(duration),
+      Fps: 30.0,
+      Loop: true,
+      AreBeziersRestricted: true,
+      CurveCount: curves.length,
+      TotalSegmentCount: curves.reduce((s, c) => s + c.Segments.length, 0),
+      TotalPointCount: curves.reduce((s, c) => s + c.Segments.length, 0),
+      UserDataCount: 0,
+      TotalUserDataSize: 0,
+    },
+    Curves: curves,
+  };
+}
+
+function round4(v) { return Math.round(v * 10000) / 10000; }
+function round6(v) { return Math.round(v * 1000000) / 1000000; }
+
+// ============================================================
+//  Utilities
+// ============================================================
+
+function setStatus(state, text) {
+  const dot = document.getElementById('status-dot');
+  const textEl = document.getElementById('status-text');
+  dot.className = 'dot' + (state === 'ready' ? ' ready' : state === 'loading' ? ' loading' : '');
+  textEl.textContent = text;
+}
+
+function toast(message, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; }, 2500);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ============================================================
+//  Boot
+// ============================================================
+
+window.addEventListener('DOMContentLoaded', () => {
+  init();
+  initSequencer();
+});
+
+// Handle resize
+window.addEventListener('resize', () => {
+  if (!pixiApp || !live2dModel) return;
+  const wrap = document.getElementById('canvas-wrap');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  pixiApp.renderer.resize(w, h);
+  const scale = Math.min(
+    (w * 0.8) / live2dModel.width,
+    (h * 0.85) / live2dModel.height
+  );
+  live2dModel.scale.set(scale);
+  live2dModel.x = w / 2;
+  live2dModel.y = h * 0.55;
+});
+</script>
+</body>
+</html>
