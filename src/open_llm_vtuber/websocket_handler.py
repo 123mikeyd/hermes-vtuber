@@ -498,16 +498,32 @@ class WebSocketHandler:
                     await websocket.send_text(
                         json.dumps({"type": "control", "text": "interrupt"})
                     )
+                    # Phase 4: user is interrupting (started talking).
+                    # Tell the frontend to switch to the Listening pool.
+                    await websocket.send_text(
+                        json.dumps({"type": "listening_state", "active": True})
+                    )
                 elif audio_bytes == b"<|RESUME|>":
                     pass
                 elif len(audio_bytes) > 1024:
-                    # Detected audio activity (voice)
+                    # Detected audio activity (voice). Mark listening
+                    # active so the frontend plays a Listening motion
+                    # while the user is mid-sentence. This is idempotent —
+                    # the sidecar de-dupes on its end so re-sending is fine.
                     self.received_data_buffers[client_uid] = np.append(
                         self.received_data_buffers[client_uid],
                         np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32),
                     )
                     await websocket.send_text(
+                        json.dumps({"type": "listening_state", "active": True})
+                    )
+                    await websocket.send_text(
                         json.dumps({"type": "control", "text": "mic-audio-end"})
+                    )
+                    # End-of-utterance signal: user finished talking.
+                    # Frontend can drop back to its quadrant pool.
+                    await websocket.send_text(
+                        json.dumps({"type": "listening_state", "active": False})
                     )
 
     async def _handle_conversation_trigger(
