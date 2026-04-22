@@ -3341,8 +3341,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (target === 'texture') {
       posePanel.style.display = 'none';
       texPanel.style.display = 'flex';
-      // Load textures if model already loaded
-      if (currentModel && texState.model !== currentModel) {
+      // Load textures if model loaded and textures not yet loaded
+      if (currentModel && texState.textures.length === 0) {
         loadTextureStrip();
       }
     } else if (target === 'pose') {
