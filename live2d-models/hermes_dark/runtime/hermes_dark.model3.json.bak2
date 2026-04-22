@@ -1,0 +1,50 @@
+{
+  "Version": 3,
+  "FileReferences": {
+    "Moc": "hermes_dark.moc3",
+    "Textures": [
+      "hermes_dark.1024/texture_00.png",
+      "hermes_dark.1024/texture_01.png",
+      "hermes_dark.1024/texture_02.png",
+      "hermes_dark.1024/texture_03.png",
+      "hermes_dark.1024/texture_04.png"
+    ],
+    "Physics": "hermes_dark.physics3.json",
+    "Pose": "hermes_dark.pose3.json",
+    "DisplayInfo": "hermes_dark.cdi3.json",
+    "Motions": {
+      "Idle": [
+        {
+          "File": "motion/01.motion3.json"
+        },
+        {
+          "File": "motion/02.motion3.json"
+        },
+        {
+          "File": "motion/03.motion3.json"
+        },
+        {
+          "File": "motion/04.motion3.json"
+        }
+      ]
+    }
+  },
+  "Groups": [
+    {
+      "Target": "Parameter",
+      "Name": "EyeBlink",
+      "Ids": [
+        "PARAM_EYE_L_OPEN",
+        "PARAM_EYE_R_OPEN"
+      ]
+    },
+    {
+      "Target": "Parameter",
+      "Name": "LipSync",
+      "Ids": [
+        "PARAM_MOUTH_OPEN_Y"
+      ]
+    }
+  ],
+  "HitAreas": []
+}

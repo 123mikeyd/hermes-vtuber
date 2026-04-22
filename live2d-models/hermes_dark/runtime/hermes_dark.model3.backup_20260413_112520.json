@@ -15,11 +15,6 @@
     "Motions": {
       "Idle": [
         {
-          "File": "motion/hide_pigtails.motion3.json",
-          "FadeInTime": 0.0,
-          "FadeOutTime": 0.0
-        },
-        {
           "File": "motion/idle_arms_down.motion3.json",
           "FadeInTime": 1.5,
           "FadeOutTime": 1.5

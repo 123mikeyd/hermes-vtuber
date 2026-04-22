@@ -1,0 +1,48 @@
+{
+  "Version": 3,
+  "Meta": {
+    "Duration": 0.1,
+    "Loop": false,
+    "FadeInTime": 0.0,
+    "FadeOutTime": 0.0,
+    "CurveCount": 3
+  },
+  "Curves": [
+    {
+      "Target": "PartOpacity",
+      "Id": "PARTS_01_HAIR_TWIN_R",
+      "Segments": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "Target": "PartOpacity",
+      "Id": "PARTS_01_HAIR_TWIN_L",
+      "Segments": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "Target": "PartOpacity",
+      "Id": "PARTS_01_HAIR_BACK_001",
+      "Segments": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    }
+  ]
+}

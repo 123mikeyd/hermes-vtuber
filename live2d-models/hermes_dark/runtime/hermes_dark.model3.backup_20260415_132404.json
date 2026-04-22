@@ -15,9 +15,9 @@
     "Motions": {
       "Idle": [
         {
-          "File": "motion/hide_pigtails.motion3.json",
-          "FadeInTime": 0.0,
-          "FadeOutTime": 0.0
+          "File": "motion/four_arm_deity_dance.motion3.json",
+          "FadeInTime": 2.0,
+          "FadeOutTime": 2.0
         },
         {
           "File": "motion/idle_arms_down.motion3.json",
@@ -46,6 +46,11 @@
         },
         {
           "File": "motion/creeper_!.motion3.json",
+          "FadeInTime": 1.5,
+          "FadeOutTime": 1.5
+        },
+        {
+          "File": "motion/Come on down.motion3.json",
           "FadeInTime": 1.5,
           "FadeOutTime": 1.5
         }

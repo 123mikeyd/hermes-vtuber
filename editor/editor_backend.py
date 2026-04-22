@@ -72,12 +72,9 @@ app.add_middleware(
 )
 
 # Serve Live2D SDK libs from OLLV's frontend
-# Note: follow_symlink intentionally left OFF — a symlink inside the libs
-# tree could otherwise expose arbitrary filesystem content via this mount.
-# Localhost bind + CORS limits blast radius, but defense-in-depth.
 _libs_dir = FRONTEND_DIR / "libs"
 if _libs_dir.exists():
-    app.mount("/frontend/libs", StaticFiles(directory=str(_libs_dir)), name="libs")
+    app.mount("/frontend/libs", StaticFiles(directory=str(_libs_dir), follow_symlink=True), name="libs")
 else:
     print(f"  CRITICAL: {_libs_dir} not found — Live2D Core unavailable!")
     print(f"  The editor will NOT work without this. Set OLLV_DIR correctly.")
@@ -86,9 +83,9 @@ else:
     async def missing_libs(path: str):
         raise HTTPException(503, f"Live2D SDK not found. Set OLLV_DIR to your Open-LLM-VTuber directory. Missing: {_libs_dir}")
 
-# Serve model files (textures, moc3, etc) — follow_symlink OFF for same reason
+# Serve model files (textures, moc3, etc)
 if MODELS_DIR.exists():
-    app.mount("/live2d-models", StaticFiles(directory=str(MODELS_DIR)), name="models")
+    app.mount("/live2d-models", StaticFiles(directory=str(MODELS_DIR), follow_symlink=True), name="models")
 else:
     print(f"  CRITICAL: {MODELS_DIR} not found — no models available!")
     print(f"  Set OLLV_DIR to your Open-LLM-VTuber directory.")
@@ -96,70 +93,6 @@ else:
     @app.get("/live2d-models/{path:path}")
     async def missing_models(path: str):
         raise HTTPException(503, f"Models directory not found. Set OLLV_DIR correctly. Missing: {MODELS_DIR}")
-
-# Phase 2: Serve Cubism Core from /libs (shortcut for index.html)
-_libs_dir_2 = _libs_dir  # reuse existing path
-if _libs_dir_2.exists():
-    app.mount("/libs", StaticFiles(directory=str(_libs_dir_2)), name="core_libs")
-
-# Phase 2: Serve compiled dist directory
-_dist_dir = EDITOR_DIR / "dist"
-if _dist_dir.exists():
-    app.mount("/dist", StaticFiles(directory=str(_dist_dir)), name="dist")
-else:
-    print(f"  INFO: dist/ not yet built — run 'npm run build' in editor/")
-
-# Phase 2: Serve Cubism WebGL shaders
-_shaders_dir = EDITOR_DIR / "lib" / "CubismWebFramework" / "Shaders"
-if _shaders_dir.exists():
-    app.mount("/shaders", StaticFiles(directory=str(_shaders_dir)), name="shaders")
-
-# Phase 2: Serve static files (index.html)
-_static_dir = EDITOR_DIR / "static"
-if _static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
-
-# Phase 2: Serve Hermes Puppet Engine
-# Default location is ~/hermes-puppet-engine (outside the repo). This is an
-# out-of-tree path by design — the puppet engine is a separate research
-# project. Override with HERMES_PUPPET_DIR env var to point somewhere else
-# (e.g. an in-repo copy for packaged distributions).
-#
-# Security posture:
-#   - Resolved to an absolute path to defeat relative-path traversal.
-#   - Must exist on disk before we mount (no silent auto-create).
-#   - Warning printed at startup if the path falls outside HOME — makes it
-#     explicit when non-default locations are served.
-_puppet_override = os.environ.get("HERMES_PUPPET_DIR")
-_puppet_dir = (
-    Path(_puppet_override).expanduser().resolve()
-    if _puppet_override
-    else (Path.home() / "hermes-puppet-engine").resolve()
-)
-if _puppet_dir.exists() and _puppet_dir.is_dir():
-    try:
-        # If the resolved path is not under HOME, warn loudly. Localhost bind
-        # keeps this contained, but still — user should know.
-        _home_resolved = Path.home().resolve()
-        try:
-            _puppet_dir.relative_to(_home_resolved)
-            _outside_home = False
-        except ValueError:
-            _outside_home = True
-
-        if _outside_home:
-            print(f"  WARNING: /puppet is serving {_puppet_dir}")
-            print(f"           This path is OUTSIDE your home directory.")
-            print(f"           Localhost bind + CORS limits exposure, but review the contents.")
-        else:
-            print(f"  INFO: /puppet serves {_puppet_dir}")
-    except OSError as _e:
-        print(f"  INFO: /puppet path check failed: {_e}")
-
-    app.mount("/puppet", StaticFiles(directory=str(_puppet_dir)), name="puppet")
-else:
-    if _puppet_override:
-        print(f"  WARNING: HERMES_PUPPET_DIR={_puppet_override!r} does not exist or is not a directory — /puppet not mounted")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -531,6 +464,105 @@ async def reset_texture(name: str, index: int):
 
     shutil.copy2(backups[0], texture_path)
     return {"status": "reset", "restored_from": backups[0].name}
+
+
+@app.post("/api/model/{name}/texture/{index}/paint")
+async def paint_texture(name: str, index: int, body: dict):
+    """
+    Paint pixels on a texture (brush/eraser/fill).
+
+    Body params:
+      tool: "brush" | "eraser" | "fill"
+      x, y: center coordinate
+      radius: brush radius in pixels (default 5)
+      color: {"r": int, "g": int, "b": int, "a": int} (default opaque black)
+      points: optional list of {"x": int, "y": int} for stroke interpolation
+    """
+    from PIL import Image, ImageDraw
+    import numpy as np
+
+    texture_path = _get_texture_path(name, index)
+
+    tool = body.get("tool", "brush")
+    color = body.get("color", {"r": 0, "g": 0, "b": 0, "a": 255})
+    radius = int(body.get("radius", 5))
+    points = body.get("points", [])
+
+    img = Image.open(texture_path).convert("RGBA")
+
+    if tool == "brush":
+        draw = ImageDraw.Draw(img)
+        rgba = (color["r"], color["g"], color["b"], color["a"])
+        if points:
+            # Draw interpolated stroke
+            for i in range(len(points) - 1):
+                x1, y1 = points[i]["x"], points[i]["y"]
+                x2, y2 = points[i+1]["x"], points[i+1]["y"]
+                # Interpolate between points
+                dist = max(1, int(((x2-x1)**2 + (y2-y1)**2) ** 0.5))
+                for t in range(dist + 1):
+                    frac = t / dist
+                    cx = int(x1 + (x2 - x1) * frac)
+                    cy = int(y1 + (y2 - y1) * frac)
+                    draw.ellipse([cx-radius, cy-radius, cx+radius, cy+radius], fill=rgba)
+        else:
+            x, y = int(body.get("x", 0)), int(body.get("y", 0))
+            draw.ellipse([x-radius, y-radius, x+radius, y+radius], fill=rgba)
+
+    elif tool == "eraser":
+        draw = ImageDraw.Draw(img)
+        if points:
+            for i in range(len(points) - 1):
+                x1, y1 = points[i]["x"], points[i]["y"]
+                x2, y2 = points[i+1]["x"], points[i+1]["y"]
+                dist = max(1, int(((x2-x1)**2 + (y2-y1)**2) ** 0.5))
+                for t in range(dist + 1):
+                    frac = t / dist
+                    cx = int(x1 + (x2 - x1) * frac)
+                    cy = int(y1 + (y2 - y1) * frac)
+                    draw.ellipse([cx-radius, cy-radius, cx+radius, cy+radius], fill=(0, 0, 0, 0))
+        else:
+            x, y = int(body.get("x", 0)), int(body.get("y", 0))
+            draw.ellipse([x-radius, y-radius, x+radius, y+radius], fill=(0, 0, 0, 0))
+
+    elif tool == "fill":
+        from PIL import Image as PILImage
+        x, y = int(body.get("x", 0)), int(body.get("y", 0))
+        rgba = (color["r"], color["g"], color["b"], color["a"])
+        # Simple flood fill
+        data = np.array(img)
+        target_color = data[y, x].copy()
+        fill_color = np.array([color["r"], color["g"], color["b"], color["a"]])
+
+        if np.array_equal(target_color, fill_color):
+            return {"status": "no_change", "message": "Fill color same as target"}
+
+        # Flood fill using a mask
+        h, w = data.shape[:2]
+        visited = np.zeros((h, w), dtype=bool)
+        stack = [(y, x)]
+        tol = 30  # tolerance for color matching
+
+        while stack:
+            cy, cx = stack.pop()
+            if cx < 0 or cx >= w or cy < 0 or cy >= h:
+                continue
+            if visited[cy, cx]:
+                continue
+            if np.any(np.abs(data[cy, cx].astype(int) - target_color.astype(int)) > tol):
+                continue
+            visited[cy, cx] = True
+            data[cy, cx] = fill_color
+            stack.extend([(cy-1, cx), (cy+1, cx), (cy, cx-1), (cy, cx+1)])
+
+        img = Image.fromarray(data, "RGBA")
+
+    # Save with backup
+    backup_name = f"{texture_path.stem}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}{texture_path.suffix}"
+    shutil.copy2(texture_path, texture_path.parent / backup_name)
+    img.save(str(texture_path), "PNG")
+
+    return {"status": "painted", "tool": tool}
 
 
 @app.get("/api/model/{name}/texture/{index}/histogram")
