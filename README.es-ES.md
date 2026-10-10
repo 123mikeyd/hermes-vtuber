@@ -1,3 +1,15 @@
+# Hermes VTuber
+
+Este repositorio contiene la integración de Hermes Agent de Mike para [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber), junto con recursos Live2D personalizados y herramientas de edición. No es el proyecto original.
+
+**Idiomas:** [English](./README.md) | Español
+
+La documentación del proyecto original se conserva a continuación. Su hoja de ruta, enlaces de comunidad, insignias y anuncios de desarrollo se refieren al proyecto original, no a esta variante. Sus instrucciones de instalación no constituyen una guía verificada para configurar la integración de Hermes de este repositorio.
+
+> **Precaución al actualizar:** Haga una copia de seguridad de la configuración, los modelos personalizados y los movimientos antes de actualizar. Este repositorio no contiene `update.py`; no utilice el comando de actualización heredado que se menciona más abajo. Todavía no se documenta aquí un procedimiento de actualización probado para esta variante.
+
+---
+
 ![](./assets/banner.jpg)
 
 <h1 align="center">Open-LLM-VTuber</h1>
@@ -18,7 +30,7 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Open-LLM-VTuber/Open-LLM-VTuber)
 
-README EN INGLÉS | [README 中文](./README.CN.md) | [README 한국어](./README.KR.md) | [README 日本語](./README.JP.md)
+[README EN INGLÉS](./README.md) | ESPAÑOL | [README 中文](./README.CN.md) | [README 한국어](./README.KR.md) | [README 日本語](./README.JP.md)
 
 [Documentación](https://open-llm-vtuber.github.io/docs/quick-start) | [![Roadmap](https://img.shields.io/badge/Roadmap-GitHub_Project-yellow)](https://github.com/orgs/Open-LLM-VTuber/projects/2)
 
@@ -103,7 +115,7 @@ Por favor, consulte la sección de [Inicio Rápido](https://open-llm-vtuber.gith
 ## ☝ Actualización
 > :warning: `v1.0.0` incluye cambios disruptivos y requiere un nuevo despliegue. *Es posible* que aún pueda actualizar mediante el método indicado a continuación, pero el archivo `conf.yaml` es incompatible y la mayoría de las dependencias deben reinstalarse con `uv`. Para aquellos que provengan de versiones anteriores a `v1.0.0`, recomiendo desplegar este proyecto nuevamente siguiendo la [guía de despliegue más reciente](https://open-llm-vtuber.github.io/docs/quick-start).
 
-Por favor, use `uv run update.py` para actualizar si instaló cualquier versión posterior a `v1.0.0`.
+El README original recomendaba `uv run update.py` para versiones posteriores a `v1.0.0`. Ese archivo no existe en esta variante; este comando de actualización no es compatible con este repositorio. Consulte la advertencia de actualización al principio de este documento.
 
 ## 😢 Desinstalación
 La mayoría de los archivos, incluyendo las dependencias de Python y los modelos, se almacenan en la carpeta del proyecto.

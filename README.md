@@ -1,3 +1,15 @@
+# Hermes VTuber
+
+This repository contains Mike's Hermes Agent integration for [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber), along with custom Live2D assets and editor tools. It is not the upstream project.
+
+**Languages:** English | [Español](./README.es-ES.md)
+
+The original upstream documentation is preserved below. Its roadmap, community links, badges, and development announcements refer to upstream, not this fork. Upstream installation instructions are not a verified setup guide for this fork's Hermes integration.
+
+> **Update caution:** Back up your configuration, custom models, and motions before updating. This repository does not contain `update.py`; do not use the inherited update command below. A tested fork-specific upgrade procedure is not documented here yet.
+
+---
+
 ![](./assets/banner.jpg)
 
 <h1 align="center">Open-LLM-VTuber</h1>
@@ -18,7 +30,7 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Open-LLM-VTuber/Open-LLM-VTuber)
 
-ENGLISH README | [中文 README](./README.CN.md) | [한국어 README](./README.KR.md) | [日本語 README](./README.JP.md)
+ENGLISH README | [Español](./README.es-ES.md) | [中文 README](./README.CN.md) | [한국어 README](./README.KR.md) | [日本語 README](./README.JP.md)
 
 [Documentation](https://open-llm-vtuber.github.io/docs/quick-start) | [![Roadmap](https://img.shields.io/badge/Roadmap-GitHub_Project-yellow)](https://github.com/orgs/Open-LLM-VTuber/projects/2)
 
@@ -106,7 +118,7 @@ Please refer to the [Quick Start](https://open-llm-vtuber.github.io/docs/quick-s
 ## ☝ Update
 > :warning: `v1.0.0` has breaking changes and requires re-deployment. You *may* still update via the method below, but the `conf.yaml` file is incompatible and most of the dependencies needs to be reinstalled with `uv`. For those who came from versions before `v1.0.0`, I recommend deploy this project again with the [latest deployment guide](https://open-llm-vtuber.github.io/docs/quick-start).
 
-Please use `uv run update.py` to update if you installed any versions later than `v1.0.0`.
+The upstream README previously recommended `uv run update.py` for versions later than `v1.0.0`. That file is absent from this fork; this is not a supported update command here. See the fork-specific update caution above.
 
 ## 😢 Uninstall  
 Most files, including Python dependencies and models, are stored in the project folder.
